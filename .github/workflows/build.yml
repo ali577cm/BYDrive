@@ -1,0 +1,52 @@
+name: Build APK
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+# Only the repository owner can trigger this (no pull_request trigger, so forks can never reach the secrets).
+permissions:
+  contents: write
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      # Third-party actions are pinned to exact commits so a moved tag cannot inject code next to the signing key.
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683   # v4.2.2
+        with: { persist-credentials: false }
+      - uses: actions/setup-java@c5195efecf7bdfc987ee8bae7a71cb8b11521c00   # v4.7.1
+        with: { distribution: temurin, java-version: 17 }
+      - uses: gradle/actions/setup-gradle@748248ddd2a24f49513d8f472f81c3a07d4d50e1   # v4.4.4
+        with: { gradle-version: 8.7 }
+      - name: Restore signing key
+        env:
+          KEYSTORE_B64: ${{ secrets.KEYSTORE_B64 }}
+        run: |
+          if [ -n "$KEYSTORE_B64" ]; then
+            umask 077
+            echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/release.jks"
+            echo "KEYSTORE_FILE=$RUNNER_TEMP/release.jks" >> "$GITHUB_ENV"
+          else
+            echo "::warning::KEYSTORE_B64 secret missing - signing with debug key; in-app updates will not install over other builds"
+          fi
+      - name: Build
+        env:
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+        run: |
+          set -o pipefail
+          gradle :app:assembleRelease -PappVersionCode=$((GITHUB_RUN_NUMBER + 1000)) 2>&1 | tee build.log || {
+            # surface compiler/Gradle errors as annotations so they are visible without downloading logs
+            grep -E "^e: |^w: .*error|What went wrong|Execution failed|error:|Caused by" -A2 build.log | head -40 | sed 's/^/::error::/'
+            exit 1
+          }
+      - name: Remove signing key from the runner
+        if: always()
+        run: rm -f "$RUNNER_TEMP/release.jks"
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cp app/build/outputs/apk/release/app-release.apk BYDrive.apk
+          CODE=$((GITHUB_RUN_NUMBER + 1000))
+          gh release create "v$CODE" BYDrive.apk --title "Build $CODE" --generate-notes
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02   # v4.6.2
+        with: { name: BYDrive-apk, path: BYDrive.apk, retention-days: 7 }

@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut
+        android:shortcutId="settings"
+        android:enabled="true"
+        android:icon="@drawable/ic_refresh"
+        android:shortcutShortLabel="@string/shortcut_settings"
+        android:shortcutLongLabel="@string/shortcut_settings">
+        <intent
+            android:action="com.overdrive.app.SETTINGS"
+            android:targetClass="com.overdrive.app.MainActivity"
+            android:targetPackage="com.overdrive.app" />
+    </shortcut>
+    <shortcut
+        android:shortcutId="monthly"
+        android:enabled="true"
+        android:icon="@drawable/ic_bolt"
+        android:shortcutShortLabel="@string/shortcut_monthly"
+        android:shortcutLongLabel="@string/shortcut_monthly">
+        <intent
+            android:action="com.overdrive.app.MONTHLY_TEST"
+            android:targetClass="com.overdrive.app.MainActivity"
+            android:targetPackage="com.overdrive.app" />
+    </shortcut>
+    <shortcut
+        android:shortcutId="stats"
+        android:enabled="true"
+        android:icon="@drawable/ic_stats"
+        android:shortcutShortLabel="@string/shortcut_stats"
+        android:shortcutLongLabel="@string/shortcut_stats">
+        <intent
+            android:action="com.overdrive.app.STATS"
+            android:targetClass="com.overdrive.app.MainActivity"
+            android:targetPackage="com.overdrive.app" />
+    </shortcut>
+</shortcuts>
