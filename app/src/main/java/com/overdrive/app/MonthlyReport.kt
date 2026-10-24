@@ -79,6 +79,7 @@ object MonthlyReport {
         var cost = 0.0
         var sessions = 0
         val counted = ArrayList<LongArray>()      // Overdrive sessions already counted (start, end)
+        val ov = Config.overrides(ctx)
         off = 0
         // also fetch sessions that began up to 3 days earlier, so one that crossed into this period is included
         val sessFrom = from - 3 * 86_400_000L
@@ -87,15 +88,16 @@ object MonthlyReport {
                 ?.optJSONArray("sessions") ?: return null
             for (i in 0 until arr.length()) {
                 val o = arr.optJSONObject(i) ?: continue
-                val start = o.optLong("startTime", 0L)
-                val inProg = o.optBoolean("inProgress", false)
+                val fix = ov[o.optLong("id", 0L)]
+                val start = fix?.start ?: o.optLong("startTime", 0L)
+                val inProg = o.optBoolean("inProgress", false) && fix == null
                 if (inProg && !live) {
                     if (start in 1 until to) return null            // still charging from last month: wait and retry
                     continue
                 }
                 // month-to-date (live): a session still running counts up to now
-                val end = if (inProg) System.currentTimeMillis() else o.optLong("endTime", 0L)
-                val e = o.optDouble("energyAdded", Double.NaN)
+                val end = fix?.end ?: if (inProg) System.currentTimeMillis() else o.optLong("endTime", 0L)
+                val e = fix?.kwh ?: o.optDouble("energyAdded", Double.NaN)
                 if (start <= 0 || end <= 0 || e.isNaN() || e <= 0) continue
                 if (end > start) counted.add(longArrayOf(start, end))
                 if (end > start) {
@@ -135,7 +137,8 @@ object MonthlyReport {
 
     /** One line of the Charges list. [kwh] is null when Overdrive recorded the session but no energy for it. */
     class ChargeRow(val id: Long, val start: Long, val end: Long, val inProgress: Boolean, val kwh: Double?,
-                    val avgKw: Double?, val socStart: Double?, val socEnd: Double?, val costPence: Double?, val manual: Boolean)
+                    val avgKw: Double?, val socStart: Double?, val socEnd: Double?, val costPence: Double?, val manual: Boolean,
+                    val edited: Boolean = false)
 
     /** Sessions from the last [days] days: Overdrive's own records plus your manual additions, newest first. */
     fun chargeRows(ctx: Context, days: Int): List<ChargeRow>? {
@@ -145,18 +148,20 @@ object MonthlyReport {
         val t = Config.tariff(ctx)
         val rows = ArrayList<ChargeRow>()
         val counted = ArrayList<LongArray>()
+        val ov = Config.overrides(ctx)
         for (i in 0 until arr.length()) {
             val o = arr.optJSONObject(i) ?: continue
-            val start = o.optLong("startTime", 0L)
-            val inProg = o.optBoolean("inProgress", false)
-            val end = if (inProg) System.currentTimeMillis() else o.optLong("endTime", 0L)
-            val e = o.optDouble("energyAdded", Double.NaN).takeIf { !it.isNaN() && it > 0 }
+            val fix = ov[o.optLong("id", 0L)]
+            val start = fix?.start ?: o.optLong("startTime", 0L)
+            val inProg = o.optBoolean("inProgress", false) && fix == null
+            val end = fix?.end ?: if (inProg) System.currentTimeMillis() else o.optLong("endTime", 0L)
+            val e = (fix?.kwh ?: o.optDouble("energyAdded", Double.NaN)).takeIf { !it.isNaN() && it > 0 }
             val kw = o.optDouble("avgPower", Double.NaN).takeIf { !it.isNaN() && it > 0 }
             val s0 = o.optDouble("startSoc", Double.NaN).takeIf { !it.isNaN() }
             val s1 = o.optDouble("endSoc", Double.NaN).takeIf { !it.isNaN() }
             val cost = if (e != null && start > 0 && end > 0) CarStatus.priceSession(start, end, e, t) else null
             if (e != null && end > start) counted.add(longArrayOf(start, end))
-            rows.add(ChargeRow(o.optLong("id", 0L), start, end, inProg, e, kw, s0, s1, cost, false))
+            rows.add(ChargeRow(o.optLong("id", 0L), start, end, inProg, e, kw, s0, s1, cost, false, fix != null))
         }
         val t0 = t.atMeter()
         val since = System.currentTimeMillis() - days * 86_400_000L

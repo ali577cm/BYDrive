@@ -241,7 +241,7 @@ class StatsActivity : Activity() {
             layoutParams = LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(8) }
             setOnClickListener { showBulkDialog() }
         })
-        content.addView(text("This is every charge Overdrive recorded in the last 45 days. If one is missing or has no energy, compare with your charger app and add it by hand (kWh as shown by the charger). Tap a charge you added to remove it.", 12f, dim).apply { setPadding(0, 0, 0, dp(10)) })
+        content.addView(text("This is every charge Overdrive recorded in the last 45 days. If one is missing or has no energy, compare with your charger app and add it by hand (kWh as shown by the charger). Tap any charge to correct its times or kWh. That only changes this app's totals, not the car's record.", 12f, dim).apply { setPadding(0, 0, 0, dp(10)) })
         val list = rows
         if (list == null) {
             content.addView(text(if (rowsFailed) "Couldn't reach the car. Check Tailscale, then tap ⟳." else "Loading…", 13f, dim))
@@ -253,7 +253,7 @@ class StatsActivity : Activity() {
         for (r in list) {
             val c = cardView()
             val head = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-            head.addView(text(day.format(Date(r.start)) + if (r.manual) "  (added by you)" else if (r.inProgress) "  (charging now)" else "", 14f, Color.WHITE, true), LinearLayout.LayoutParams(0, -2, 1f))
+            head.addView(text(day.format(Date(r.start)) + if (r.manual) "  (added by you)" else if (r.edited) "  (edited by you)" else if (r.inProgress) "  (charging now)" else "", 14f, Color.WHITE, true), LinearLayout.LayoutParams(0, -2, 1f))
             head.addView(text(r.costPence?.let { money(it) } ?: "—", 16f, accent, true))
             c.addView(head)
             val mins = Math.max(0L, (r.end - r.start) / 60_000L)
@@ -263,12 +263,7 @@ class StatsActivity : Activity() {
             r.avgKw?.let { detail.append(" · %.1f kW avg".format(it)) }
             if (r.socStart != null && r.socEnd != null) detail.append(" · ${Math.round(r.socStart)}→${Math.round(r.socEnd)}%")
             c.addView(text(detail.toString(), 12f, if (r.kwh == null) Color.parseColor("#FFC857") else dim).apply { setPadding(0, dp(2), 0, 0) })
-            if (r.manual) c.setOnClickListener {
-                AlertDialog.Builder(this).setTitle("Remove this charge?")
-                    .setMessage("${day.format(Date(r.start))} ${hm.format(Date(r.start))}–${hm.format(Date(r.end))}, ${kwh(r.kwh ?: 0.0)}")
-                    .setPositiveButton("Remove") { _, _ -> Config.removeManual(this, r.id); manualChanged() }
-                    .setNegativeButton("Keep", null).show()
-            }
+            c.setOnClickListener { showEditDialog(r) }
             content.addView(c)
         }
     }
@@ -323,6 +318,49 @@ class StatsActivity : Activity() {
             }
             .setNegativeButton("Cancel", null)
             .show()
+    }
+
+    /** Edit a charge: your own entries are changed in place; one from Overdrive gets a correction stored on this phone. */
+    private fun showEditDialog(r: MonthlyReport.ChargeRow) {
+        if (r.inProgress) { Toast.makeText(this, "Wait until the charge has finished to edit it", Toast.LENGTH_SHORT).show(); return }
+        val dateF = SimpleDateFormat("yyyy-MM-dd", Locale.US)
+        val timeF = SimpleDateFormat("HH:mm", Locale.US)
+        fun field(hint: String, value: String, number: Boolean = false) = EditText(this).apply {
+            this.hint = hint
+            setText(value)
+            setSingleLine()
+            if (number) inputType = InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_FLAG_DECIMAL
+        }
+        val d = field("Date it started (YYYY-MM-DD)", dateF.format(Date(r.start)))
+        val a = field("Start time (HH:MM)", timeF.format(Date(r.start)))
+        val b = field("End time (HH:MM)", timeF.format(Date(r.end)))
+        val k = field("Energy delivered (kWh)", r.kwh?.let { "%.2f".format(Locale.US, it) } ?: "", number = true)
+        val box = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(20), 0, dp(20), 0)
+            listOf(d, a, b, k).forEach { addView(it) }
+        }
+        val dlg = AlertDialog.Builder(this).setTitle("Edit this charge")
+            .setMessage(if (r.manual) "Use the figures from your charger app." else "Corrects this charge in the app's totals only. Overdrive's own record is not changed.")
+            .setView(box)
+            .setPositiveButton("Save") { _, _ ->
+                try {
+                    val f = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.US)
+                    val start = f.parse(d.text.toString().trim() + " " + a.text.toString().trim())!!.time
+                    var end = f.parse(d.text.toString().trim() + " " + b.text.toString().trim())!!.time
+                    if (end <= start) end += 86_400_000L
+                    val e = k.text.toString().trim().replace(',', '.').toDouble()
+                    if (e <= 0 || e > 300 || end - start > 48 * 3_600_000L || start > System.currentTimeMillis()) throw IllegalArgumentException()
+                    if (r.manual) Config.updateManual(this, r.id, start, end, e) else Config.setOverride(this, r.id, Config.Override(start, end, e))
+                    manualChanged()
+                } catch (_: Exception) {
+                    Toast.makeText(this, "Couldn't save that - check the date, times and kWh", Toast.LENGTH_LONG).show()
+                }
+            }
+            .setNegativeButton("Cancel", null)
+        if (r.manual) dlg.setNeutralButton("Remove") { _, _ -> Config.removeManual(this, r.id); manualChanged() }
+        else if (r.edited) dlg.setNeutralButton("Undo my edit") { _, _ -> Config.setOverride(this, r.id, null); manualChanged() }
+        dlg.show()
     }
 
     private fun showAddDialog() {
