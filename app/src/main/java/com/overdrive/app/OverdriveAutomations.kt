@@ -1,41 +1,81 @@
 package com.overdrive.app
 
+import android.content.Context
 import org.json.JSONArray
 import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
-import android.content.Context
 
 /**
- * Creates two rules in Overdrive's own Automations (they then run on the car, with no phone needed):
- *  - every time the car is locked, turn Child Presence Detection off
- *  - whenever Speed Limit Warning turns on (the car re-enables it when it starts), turn it off again
+ * Creates (or updates) a small set of rules in Overdrive's own Automations; they then run on the car, with no phone needed:
+ *  - when the car locks, turn Child Presence Detection off
+ *  - whenever Speed Limit Warning turns on, turn it off again
+ *  - if a window or the sunroof opens while the car is locked, close them and send a notification
+ *  - if the cabin goes over 26 C while the car is locked, send a notification
+ *  - at 11pm, if the car is not plugged in, send a notification
  * Uses the login the app already holds, only talks to the configured address, and only does this when you tap the button.
  */
 object OverdriveAutomations {
 
-    private class Rule(val name: String, val trigger: JSONObject, val action: JSONObject)
+    private class Rule(val name: String, val triggers: List<JSONObject>, val conditions: List<JSONObject>, val actions: List<JSONObject>)
+
+    /** A trigger fires when this signal changes; extra choices (like which window) go in [vars]. */
+    private fun trigger(type: String, vararg vars: Pair<String, String>) =
+        JSONObject().put("type", type).put("variables", JSONObject().also { o -> vars.forEach { o.put(it.first, it.second) } })
+
+    /** A condition compares the signal's value; [cmp] is eq, neq, gt, lt, gte or lte. */
+    private fun cond(type: String, cmp: String, value: Any, vararg vars: Pair<String, String>) =
+        trigger(type, *vars).put("comparator", cmp).put("value", value)
+
+    private fun action(type: String, vararg vars: Pair<String, Any>) =
+        JSONObject().put("type", type).put("variables", JSONObject().also { o -> vars.forEach { o.put(it.first, it.second) } })
+
+    private val locked = cond("lock", "eq", "locked")
 
     private val rules = listOf(
         Rule(
             "BYDrive: CPD off when locked",
-            JSONObject().put("type", "lock").put("variables", JSONObject().put("state", "locked")),
-            JSONObject().put("type", "cpd").put("variables", JSONObject().put("action", "2")),   // 2 = off
+            listOf(trigger("lock")),
+            listOf(locked),
+            listOf(action("cpd", "action" to "2")),                                   // 2 = off
         ),
         Rule(
             "BYDrive: speed limit warning off whenever it turns on",
-            JSONObject().put("type", "slw").put("variables", JSONObject().put("state", "on")),
-            JSONObject().put("type", "adas_slw").put("variables", JSONObject().put("payload", "off")),
+            listOf(trigger("slw")),
+            listOf(cond("slw", "eq", "on")),
+            listOf(action("adas_slw", "payload" to "off")),
+        ),
+        Rule(
+            "BYDrive: close windows if opened while locked",
+            listOf("lf", "rf", "lr", "rr", "sunroof").map { trigger("windowState", "area" to it) },
+            listOf(locked),
+            listOf(
+                action("windowsAll", "command" to "2"),                               // 2 = close
+                action("sunroof", "payload" to "close"),
+                action("notification", "message" to "A window or the sunroof opened while the car was locked. BYDrive closed it."),
+            ),
+        ),
+        Rule(
+            "BYDrive: cabin over 26C alert",
+            listOf(trigger("temperature")),
+            listOf(locked, cond("temperature", "gt", 26)),
+            listOf(action("notification", "message" to "The cabin is over 26C while the car is locked. Check on your pet.")),
+        ),
+        Rule(
+            "BYDrive: not plugged in at 11pm",
+            listOf(trigger("time")),
+            listOf(cond("time", "eq", 23 * 60), cond("chargeGun", "eq", "disconnected")),
+            listOf(action("notification", "message" to "It is 11pm and the car is not plugged in.")),
         ),
     )
 
     private fun body(r: Rule): String = JSONObject()
         .put("name", r.name)
-        .put("triggers", JSONArray().put(r.trigger))
-        .put("conditions", JSONArray())
+        .put("triggers", JSONArray(r.triggers))
+        .put("conditions", JSONArray(r.conditions))
         .put("conditionLogic", "and")
         .put("delay", 0)
-        .put("actions", JSONArray().put(r.action))
+        .put("actions", JSONArray(r.actions))
         .put("elseActions", JSONArray())
         .put("disabled", false)
         .toString()
@@ -63,21 +103,28 @@ object OverdriveAutomations {
     fun install(ctx: Context): String {
         val (base, cookie) = CarStatus.auth(ctx) ?: return "Set the address and sign in first"
         return try {
-            val (lc, existing) = call(base, cookie, "GET", "/api/automations/list", null)
+            val (lc, listText) = call(base, cookie, "GET", "/api/automations/picker", null)
             if (lc == 401 || lc == 403 || lc in 300..399) return "Sign in via the app first"
             if (lc != 200) return "Overdrive answered HTTP $lc"
-            var made = 0
-            var skipped = 0
+            // name -> id of rules already in Overdrive, so a second tap updates them instead of duplicating
+            val ids = HashMap<String, String>()
+            try {
+                val arr = JSONArray(listText)
+                for (i in 0 until arr.length()) arr.optJSONObject(i)?.let { ids[it.optString("name")] = it.optString("id") }
+            } catch (_: Exception) {}
+            var created = 0
+            var updated = 0
             val problems = ArrayList<String>()
             for (r in rules) {
-                if (existing.contains(r.name)) { skipped++; continue }          // already there from an earlier tap
-                val (code, text) = call(base, cookie, "POST", "/api/automations/automation", body(r))
-                if (code == 200) made++ else problems.add("${r.name}: HTTP $code ${text.take(80)}")
+                val id = ids[r.name]
+                val (code, text) = if (id.isNullOrEmpty()) call(base, cookie, "POST", "/api/automations/automation", body(r))
+                                   else call(base, cookie, "PUT", "/api/automations/automation/" + java.net.URLEncoder.encode(id, "UTF-8"), body(r))
+                if (code == 200) { if (id.isNullOrEmpty()) created++ else updated++ }
+                else problems.add("${r.name}: HTTP $code ${text.take(80)}")
             }
             when {
-                problems.isNotEmpty() -> "Could not create: " + problems.joinToString("; ")
-                made == 0 -> "Both rules are already in Overdrive"
-                else -> "Created $made rule(s) in Overdrive" + (if (skipped > 0) " ($skipped already existed)" else "") + ". Lock the car and check."
+                problems.isNotEmpty() -> "Problem with: " + problems.joinToString("; ") + (if (created + updated > 0) " (others done)" else "")
+                else -> "Overdrive rules ready: $created created, $updated updated"
             }
         } catch (e: java.io.IOException) {
             "Couldn't reach Overdrive (is Tailscale connected and the car awake?)"
