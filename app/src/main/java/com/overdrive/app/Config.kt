@@ -42,7 +42,7 @@ object Config {
                  val later: Tariff? = null, val switchAt: Long = 0L) {
         fun signature(): String = "$stdPence|$cheapPence|$startMin|$endMin|$effPercent" + (later?.let { "|$switchAt>" + it.signature() } ?: "")
         /** The tariff in force for a charge that started at [start]. */
-        fun at(start: Long): Tariff = if (later != null && start >= switchAt) later else this
+        fun at(start: Long): Tariff = if (later != null && start >= switchAt) later.at(start) else this
         /** Same tariffs with charger losses ignored (for energy already measured at the meter). */
         fun atMeter(): Tariff = Tariff(stdPence, cheapPence, startMin, endMin, 100.0, later?.atMeter(), switchAt)
     }
@@ -51,20 +51,28 @@ object Config {
     fun tariff(c: Context): Tariff {
         val p = prefs(c)
         val eff = p.getFloat("tEff", 100f).toDouble()
-        val later = Tariff(p.getFloat("nStd", 30.78f).toDouble(), p.getFloat("nCheap", 6.66f).toDouble(),
-            p.getInt("nStart", 0), p.getInt("nEnd", 300), eff)
+        val ev = evTariff(c)
+        // 22-24 Oct 2026: on EDF's standard rate (24p flat) until the EV tariff went live
+        val flat = Tariff(24.0, 24.0, 0, 0, eff, ev, p.getLong("nSwitch", defaultSwitch()))
         return Tariff(p.getFloat("tStd", 36.67f).toDouble(), p.getFloat("tCheap", 9.5f).toDouble(),
-            p.getInt("tStart", 30), p.getInt("tEnd", 330), eff, later, p.getLong("nSwitch", defaultSwitch()))
+            p.getInt("tStart", 30), p.getInt("tEnd", 330), eff, flat, java.util.GregorianCalendar(2026, java.util.Calendar.OCTOBER, 22).timeInMillis)
+    }
+
+    /** The EDF Go Electric tariff (from the switch date). */
+    fun evTariff(c: Context): Tariff {
+        val p = prefs(c)
+        return Tariff(p.getFloat("nStd", 30.78f).toDouble(), p.getFloat("nCheap", 6.66f).toDouble(),
+            p.getInt("nStart", 0), p.getInt("nEnd", 300), p.getFloat("tEff", 100f).toDouble())
     }
 
     /** EDF switch-over: midnight at the start of 24 Oct 2026, local time. */
     private fun defaultSwitch(): Long = java.util.GregorianCalendar(2026, java.util.Calendar.OCTOBER, 24).timeInMillis
 
     fun switchText(c: Context): String =
-        java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.UK).format(java.util.Date(tariff(c).switchAt))
+        java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.UK).format(java.util.Date(prefs(c).getLong("nSwitch", defaultSwitch())))
 
     fun laterWindowText(c: Context): String {
-        val t = tariff(c).later!!
+        val t = evTariff(c)
         return "%02d:%02d-%02d:%02d".format(t.startMin / 60, t.startMin % 60, t.endMin / 60, t.endMin % 60)
     }
 

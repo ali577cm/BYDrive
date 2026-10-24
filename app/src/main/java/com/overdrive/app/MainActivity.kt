@@ -199,13 +199,13 @@ class MainActivity : Activity() {
         val laterStd = EditText(this).apply {
             hint = "From switch date: standard price (p/kWh)"
             inputType = InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_FLAG_DECIMAL
-            setText(Config.tariff(this@MainActivity).later!!.stdPence.toString().removeSuffix(".0"))
+            setText(Config.evTariff(this@MainActivity).stdPence.toString().removeSuffix(".0"))
             setSingleLine()
         }
         val laterCheap = EditText(this).apply {
             hint = "From switch date: cheap price (p/kWh)"
             inputType = InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_FLAG_DECIMAL
-            setText(Config.tariff(this@MainActivity).later!!.cheapPence.toString().removeSuffix(".0"))
+            setText(Config.evTariff(this@MainActivity).cheapPence.toString().removeSuffix(".0"))
             setSingleLine()
         }
         val laterWindow = EditText(this).apply {
@@ -214,7 +214,7 @@ class MainActivity : Activity() {
             setSingleLine()
         }
         val laterDate = EditText(this).apply {
-            hint = "Switch date (YYYY-MM-DD)"
+            hint = "EV tariff start date (YYYY-MM-DD)"
             setText(Config.switchText(this@MainActivity))
             setSingleLine()
         }
