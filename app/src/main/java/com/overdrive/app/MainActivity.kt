@@ -196,6 +196,28 @@ class MainActivity : Activity() {
             setText(Config.tariff(this@MainActivity).effPercent.toString().removeSuffix(".0"))
             setSingleLine()
         }
+        val laterStd = EditText(this).apply {
+            hint = "From switch date: standard price (p/kWh)"
+            inputType = InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_FLAG_DECIMAL
+            setText(Config.tariff(this@MainActivity).later!!.stdPence.toString().removeSuffix(".0"))
+            setSingleLine()
+        }
+        val laterCheap = EditText(this).apply {
+            hint = "From switch date: cheap price (p/kWh)"
+            inputType = InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_FLAG_DECIMAL
+            setText(Config.tariff(this@MainActivity).later!!.cheapPence.toString().removeSuffix(".0"))
+            setSingleLine()
+        }
+        val laterWindow = EditText(this).apply {
+            hint = "From switch date: cheap window (HH:MM-HH:MM)"
+            setText(Config.laterWindowText(this@MainActivity))
+            setSingleLine()
+        }
+        val laterDate = EditText(this).apply {
+            hint = "Switch date (YYYY-MM-DD)"
+            setText(Config.switchText(this@MainActivity))
+            setSingleLine()
+        }
         val monthlyBox = CheckBox(this).apply {
             text = "Monthly summary notification on the 1st"
             isChecked = Config.monthlyEnabled(this@MainActivity)
@@ -214,6 +236,10 @@ class MainActivity : Activity() {
             addView(cheapInput)
             addView(windowInput)
             addView(effInput)
+            addView(laterStd)
+            addView(laterCheap)
+            addView(laterWindow)
+            addView(laterDate)
             addView(monthlyBox)
             addView(bgSpinner)
             addView(android.widget.Button(this@MainActivity).apply {
@@ -236,7 +262,7 @@ class MainActivity : Activity() {
         }
         val d = AlertDialog.Builder(this)
             .setTitle("Overdrive address")
-            .setMessage("Your Overdrive address, electricity tariff (standard and cheap-rate prices and window) and widget settings. All are stored only on this phone.")
+            .setMessage("Your Overdrive address, electricity tariff (standard and cheap-rate prices and window; the first set applies before the switch date, the second from it) and widget settings. All are stored only on this phone.")
             .setView(android.widget.ScrollView(this).apply { addView(box) })
             .setCancelable(url != null)
             .setPositiveButton("Save") { _, _ ->
@@ -250,6 +276,8 @@ class MainActivity : Activity() {
                     MonthlyReport.schedule(this)
                     if (monthlyBox.isChecked) askNotificationPermission()
                     Config.setTariff(this, stdInput.text.toString(), cheapInput.text.toString(), windowInput.text.toString(), effInput.text.toString())
+                        ?.let { Toast.makeText(this, it, Toast.LENGTH_LONG).show() }
+                    Config.setLaterTariff(this, laterStd.text.toString(), laterCheap.text.toString(), laterWindow.text.toString(), laterDate.text.toString())
                         ?.let { Toast.makeText(this, it, Toast.LENGTH_LONG).show() }
                     url = saved
                     failed = false

@@ -38,15 +38,54 @@ object Config {
     fun setMonthlyEnabled(c: Context, on: Boolean) { prefs(c).edit().putBoolean("monthly", on).apply() }
 
     /** Time-of-day electricity tariff (pence per kWh): a cheap window and a standard rate the rest of the day. */
-    class Tariff(val stdPence: Double, val cheapPence: Double, val startMin: Int, val endMin: Int, val effPercent: Double = 100.0) {
-        fun signature() = "$stdPence|$cheapPence|$startMin|$endMin|$effPercent"
+    class Tariff(val stdPence: Double, val cheapPence: Double, val startMin: Int, val endMin: Int, val effPercent: Double = 100.0,
+                 val later: Tariff? = null, val switchAt: Long = 0L) {
+        fun signature(): String = "$stdPence|$cheapPence|$startMin|$endMin|$effPercent" + (later?.let { "|$switchAt>" + it.signature() } ?: "")
+        /** The tariff in force for a charge that started at [start]. */
+        fun at(start: Long): Tariff = if (later != null && start >= switchAt) later else this
+        /** Same tariffs with charger losses ignored (for energy already measured at the meter). */
+        fun atMeter(): Tariff = Tariff(stdPence, cheapPence, startMin, endMin, 100.0, later?.atMeter(), switchAt)
     }
 
     /** Defaults match Octopus Go: 9.5p 00:30-05:30, 36.67p otherwise. */
     fun tariff(c: Context): Tariff {
         val p = prefs(c)
+        val eff = p.getFloat("tEff", 100f).toDouble()
+        val later = Tariff(p.getFloat("nStd", 30.78f).toDouble(), p.getFloat("nCheap", 6.66f).toDouble(),
+            p.getInt("nStart", 0), p.getInt("nEnd", 300), eff)
         return Tariff(p.getFloat("tStd", 36.67f).toDouble(), p.getFloat("tCheap", 9.5f).toDouble(),
-            p.getInt("tStart", 30), p.getInt("tEnd", 330), p.getFloat("tEff", 100f).toDouble())
+            p.getInt("tStart", 30), p.getInt("tEnd", 330), eff, later, p.getLong("nSwitch", defaultSwitch()))
+    }
+
+    /** EDF switch-over: midnight at the start of 24 Oct 2026, local time. */
+    private fun defaultSwitch(): Long = java.util.GregorianCalendar(2026, java.util.Calendar.OCTOBER, 24).timeInMillis
+
+    fun switchText(c: Context): String =
+        java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.UK).format(java.util.Date(tariff(c).switchAt))
+
+    fun laterWindowText(c: Context): String {
+        val t = tariff(c).later!!
+        return "%02d:%02d-%02d:%02d".format(t.startMin / 60, t.startMin % 60, t.endMin / 60, t.endMin % 60)
+    }
+
+    /** Saves the tariff that applies from the switch date; returns null when OK, otherwise what was wrong. */
+    fun setLaterTariff(c: Context, std: String, cheap: String, window: String, date: String): String? {
+        val s = std.trim().replace(',', '.').toFloatOrNull()
+        val ch = cheap.trim().replace(',', '.').toFloatOrNull()
+        if (s == null || s < 0f || s > 1000f) return "New standard price not saved (pence per kWh, e.g. 30.78)"
+        if (ch == null || ch < 0f || ch > 1000f) return "New cheap price not saved (pence per kWh, e.g. 6.66)"
+        val m = Regex("^(\\d{1,2}):(\\d{2})\\s*-\\s*(\\d{1,2}):(\\d{2})$").matchEntire(window.trim())
+            ?: return "New cheap window not saved (use HH:MM-HH:MM)"
+        val (h1, m1, h2, m2) = m.destructured
+        if (h1.toInt() > 23 || h2.toInt() > 23 || m1.toInt() > 59 || m2.toInt() > 59) return "New cheap window not saved (invalid time)"
+        val d = Regex("^(\\d{4})-(\\d{2})-(\\d{2})$").matchEntire(date.trim())
+            ?: return "Switch date not saved (use YYYY-MM-DD)"
+        val (y, mo, da) = d.destructured
+        if (mo.toInt() !in 1..12 || da.toInt() !in 1..31) return "Switch date not saved (invalid date)"
+        prefs(c).edit().putFloat("nStd", s).putFloat("nCheap", ch)
+            .putInt("nStart", h1.toInt() * 60 + m1.toInt()).putInt("nEnd", h2.toInt() * 60 + m2.toInt())
+            .putLong("nSwitch", java.util.GregorianCalendar(y.toInt(), mo.toInt() - 1, da.toInt()).timeInMillis).apply()
+        return null
     }
 
     fun windowText(c: Context): String {

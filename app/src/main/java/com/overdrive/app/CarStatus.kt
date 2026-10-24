@@ -92,7 +92,7 @@ object CarStatus {
             if (start > 0 && end > 0 && !e.isNaN() && e > 0) { odStart = start; odEnd = end; odCost = priceSession(start, end, e, t); break }
         }
         // a charge you added by hand that is newer than Overdrive's latest (and not the same charge) wins
-        val t0 = Config.Tariff(t.stdPence, t.cheapPence, t.startMin, t.endMin, 100.0)
+        val t0 = t.atMeter()
         val m = Config.manualSessions(ctx).filter { it.end <= System.currentTimeMillis() && it.kwh > 0 && it.end > it.start }
             .maxByOrNull { it.start }
         if (m != null && (odCost == null || m.start > odStart)) {
@@ -123,8 +123,9 @@ object CarStatus {
     }
 
     /** Cost in pence of [kwh] delivered evenly between [start] and [end], split by the cheap/standard windows. */
-    internal fun priceSession(start: Long, end: Long, batteryKwh: Double, t: Config.Tariff): Double {
+    internal fun priceSession(start: Long, end: Long, batteryKwh: Double, tariff: Config.Tariff): Double {
         if (batteryKwh <= 0) return 0.0
+        val t = tariff.at(start)
         val kwh = batteryKwh * 100.0 / t.effPercent      // energy drawn from the meter, incl. charger losses
         if (end <= start) return kwh * (if (cheapOverlapMs(start, start + 1, t) > 0) t.cheapPence else t.stdPence)
         val cheapFrac = cheapOverlapMs(start, end, t).toDouble() / (end - start)

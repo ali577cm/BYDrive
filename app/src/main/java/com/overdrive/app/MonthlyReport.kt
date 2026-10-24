@@ -117,7 +117,7 @@ object MonthlyReport {
         }
         // charges added by hand from the charger app (energy at the meter, so no charger-loss gross-up);
         // skipped when Overdrive already recorded that charge
-        val t0 = Config.Tariff(t.stdPence, t.cheapPence, t.startMin, t.endMin, 100.0)
+        val t0 = t.atMeter()
         for (m in Config.manualSessions(ctx)) {
             val dur = m.end - m.start
             if (dur <= 0 || m.kwh <= 0) continue
@@ -158,7 +158,7 @@ object MonthlyReport {
             if (e != null && end > start) counted.add(longArrayOf(start, end))
             rows.add(ChargeRow(o.optLong("id", 0L), start, end, inProg, e, kw, s0, s1, cost, false))
         }
-        val t0 = Config.Tariff(t.stdPence, t.cheapPence, t.startMin, t.endMin, 100.0)
+        val t0 = t.atMeter()
         val since = System.currentTimeMillis() - days * 86_400_000L
         for (m in Config.manualSessions(ctx)) {
             if (m.end < since) continue
