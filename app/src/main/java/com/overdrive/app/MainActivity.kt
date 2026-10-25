@@ -247,7 +247,7 @@ class MainActivity : Activity() {
                 setOnClickListener {
                     AlertDialog.Builder(this@MainActivity)
                         .setTitle("Create rules in Overdrive?")
-                        .setMessage("1) When the car locks: Child Presence Detection OFF.\n2) Whenever Speed Limit Warning turns on: turn it OFF.\n3) If a window or the sunroof opens while locked: close it and notify you.\n4) If the cabin goes over 26C while locked: notify you.\n5) At 11pm if the car is not plugged in: notify you.\n\nThey are created in Overdrive's Automations and run on the car. Tapping again updates them. You can delete them there at any time.")
+                        .setMessage("1) When the car locks: Child Presence Detection OFF.\n2) Whenever Speed Limit Warning turns on: turn it OFF.\n3) If a window or the sunroof opens while locked: close it and notify you.\n4) If the cabin goes over 26C while locked: notify you.\n5) At 11pm if the car is not plugged in: notify you.\n6) At 11:15pm if the car is not charging: notify you.\n\nThey are created in Overdrive's Automations and run on the car. Tapping again updates them. You can delete them there at any time.")
                         .setPositiveButton("Create") { _, _ ->
                             Toast.makeText(this@MainActivity, "Creating…", Toast.LENGTH_SHORT).show()
                             thread {

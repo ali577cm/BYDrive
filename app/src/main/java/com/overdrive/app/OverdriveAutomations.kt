@@ -13,6 +13,7 @@ import java.net.URL
  *  - if a window or the sunroof opens while the car is locked, close them and send a notification
  *  - if the cabin goes over 26 C while the car is locked, send a notification
  *  - at 11pm, if the car is not plugged in, send a notification
+ *  - at 11:15pm, if the car is not charging, send a notification
  * Uses the login the app already holds, only talks to the configured address, and only does this when you tap the button.
  */
 object OverdriveAutomations {
@@ -66,6 +67,12 @@ object OverdriveAutomations {
             listOf(trigger("time")),
             listOf(cond("time", "eq", 23 * 60), cond("chargeGun", "eq", "disconnected")),
             listOf(action("notification", "message" to "It is 11pm and the car is not plugged in.")),
+        ),
+        Rule(
+            "BYDrive: not charging at 11:15pm",
+            listOf(trigger("time")),
+            listOf(cond("time", "eq", 23 * 60 + 15), cond("chargingState", "eq", "off")),
+            listOf(action("notification", "message" to "It is 11:15pm and the car is not charging.")),
         ),
     )
 
