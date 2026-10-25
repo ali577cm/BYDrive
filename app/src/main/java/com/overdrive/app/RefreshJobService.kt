@@ -10,6 +10,7 @@ class RefreshJobService : JobService() {
         thread {
             try {
                 if (SealDriveWidget.hasMainWidgets(this)) SealDriveWidget.refreshNow(this)
+                try { AwayCharges.check(this) } catch (_: Exception) {}
             } finally {
                 jobFinished(params, false)
             }

@@ -87,6 +87,7 @@ class StatsActivity : Activity() {
         root.addView(ScrollView(this).apply { addView(content) }, LinearLayout.LayoutParams(-1, 0, 1f))
         setContentView(root)
 
+        if (intent.getLongExtra("editId", 0L) != 0L) { tab = 3; loadCharges() }
         render()
         load(force = false)
     }
@@ -158,7 +159,14 @@ class StatsActivity : Activity() {
             val r = MonthlyReport.chargeRows(this, 45)
             rows = r
             rowsFailed = r == null
-            runOnUiThread { render() }
+            runOnUiThread {
+                render()
+                val want = intent.getLongExtra("editId", 0L)
+                if (want != 0L) {
+                    intent.removeExtra("editId")
+                    r?.firstOrNull { !it.manual && it.id == want }?.let { showEditDialog(it) }
+                }
+            }
         }
     }
 
@@ -348,6 +356,7 @@ class StatsActivity : Activity() {
         val k = field(r.kwh?.let { "%.2f".format(Locale.US, it) } ?: "", "kWh", number = true)
         val autoP = if (r.kwh != null && r.costPence != null && r.kwh > 0) r.costPence / r.kwh else null
         val p = field(r.rate?.let { "%.2f".format(Locale.US, it) } ?: "", autoP?.let { "Auto: %.2f from your tariff".format(Locale.US, it) } ?: "Auto from your tariff", number = true)
+        val tc = field("", "e.g. 14.50 - fills the price for you", number = true)
         val box = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(22), dp(20), dp(22), dp(10))
@@ -363,7 +372,8 @@ class StatsActivity : Activity() {
                 addView(m, LinearLayout.LayoutParams(0, -2, 1f).apply { leftMargin = dp(6) })
             })
             addView(label("ENERGY (KWH)")); addView(k)
-            addView(label("PRICE (PENCE PER KWH) - LEAVE EMPTY FOR AUTO")); addView(p)
+            addView(label("TOTAL COST YOU PAID (£) - OPTIONAL")); addView(tc)
+            addView(label("OR PRICE (PENCE PER KWH) - EMPTY FOR AUTO")); addView(p)
         }
         fun btn(t: String, color: Int, onClick: () -> Unit) = text(t, 14f, color, true).apply {
             gravity = Gravity.CENTER
@@ -384,7 +394,9 @@ class StatsActivity : Activity() {
                 var end = f.parse(d.text.toString().trim() + " " + b.text.toString().trim())!!.time
                 if (end <= start) end += 86_400_000L
                 val e = k.text.toString().trim().replace(',', '.').toDouble()
-                val rate = p.text.toString().trim().replace(',', '.').takeIf { it.isNotEmpty() }?.toDouble()
+                val total = tc.text.toString().trim().replace(',', '.').takeIf { it.isNotEmpty() }?.toDouble()
+                val drawn = if (r.manual) e else e * 100.0 / Config.tariff(this).effPercent
+                val rate = if (total != null) total * 100.0 / drawn else p.text.toString().trim().replace(',', '.').takeIf { it.isNotEmpty() }?.toDouble()
                 if (e <= 0 || e > 300 || end - start > 48 * 3_600_000L || start > System.currentTimeMillis() || (rate != null && (rate < 0 || rate > 1000))) throw IllegalArgumentException()
                 if (r.manual) Config.updateManual(this, r.id, start, end, e, rate) else Config.setOverride(this, r.id, Config.Override(start, end, e, rate))
                 manualChanged()
