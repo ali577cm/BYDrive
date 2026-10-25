@@ -127,6 +127,19 @@ object CarStatus {
     /** Cost in pence of [kwh] delivered evenly between [start] and [end], split by the cheap/standard windows. */
     internal fun priceSession(start: Long, end: Long, batteryKwh: Double, tariff: Config.Tariff, fixedPence: Double? = null): Double {
         if (batteryKwh <= 0) return 0.0
+        if (fixedPence == null && end > start) {
+            // a charge that runs across a tariff change is split at that moment, each part priced at its own tariff
+            val cuts = ArrayList<Long>()
+            var n: Config.Tariff? = tariff
+            while (n?.later != null) { if (n.switchAt in (start + 1) until end) cuts.add(n.switchAt); n = n.later }
+            if (cuts.isNotEmpty()) {
+                val pts = listOf(start) + cuts.sorted() + end
+                var sum = 0.0
+                for (i in 0 until pts.size - 1)
+                    sum += priceSession(pts[i], pts[i + 1], batteryKwh * (pts[i + 1] - pts[i]) / (end - start), tariff)
+                return sum
+            }
+        }
         val t = tariff.at(start)
         val kwh = batteryKwh * 100.0 / t.effPercent      // energy drawn from the meter, incl. charger losses
         if (fixedPence != null) return kwh * fixedPence   // a price you set for this charge
