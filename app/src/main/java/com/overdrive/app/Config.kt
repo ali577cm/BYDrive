@@ -79,8 +79,11 @@ object Config {
     /** The EDF Go Electric tariff (from the switch date). */
     fun evTariff(c: Context): Tariff {
         val p = prefs(c)
+        if (!p.getBoolean("nWin23", false)) {       // earlier builds guessed 00:00-05:00; EDF's night rate is 23:00-06:00
+            p.edit().putInt("nStart", 23 * 60).putInt("nEnd", 6 * 60).putBoolean("nWin23", true).apply()
+        }
         return Tariff(p.getFloat("nStd", 30.78f).toDouble(), p.getFloat("nCheap", 6.66f).toDouble(),
-            p.getInt("nStart", 0), p.getInt("nEnd", 300), p.getFloat("tEff", 100f).toDouble())
+            p.getInt("nStart", 23 * 60), p.getInt("nEnd", 6 * 60), p.getFloat("tEff", 100f).toDouble())
     }
 
     /** EDF switch-over: midnight at the start of 24 Oct 2026, local time. */
