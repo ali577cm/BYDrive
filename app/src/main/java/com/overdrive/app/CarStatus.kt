@@ -83,13 +83,15 @@ object CarStatus {
         var odStart = 0L
         var odEnd = 0L
         var odCost: Double? = null
+        val ov = Config.overrides(ctx)
         if (arr != null) for (i in 0 until arr.length()) {
             val o = arr.optJSONObject(i) ?: continue
-            if (o.optBoolean("inProgress", false)) continue
-            val start = o.optLong("startTime", 0L)
-            val end = o.optLong("endTime", 0L)
-            val e = o.optDouble("energyAdded", Double.NaN)
-            if (start > 0 && end > 0 && !e.isNaN() && e > 0) { odStart = start; odEnd = end; odCost = priceSession(start, end, e, t); break }
+            val fix = ov[o.optLong("id", 0L)]                    // your corrections from the Charges list
+            if (o.optBoolean("inProgress", false) && fix == null) continue
+            val start = fix?.start ?: o.optLong("startTime", 0L)
+            val end = fix?.end ?: o.optLong("endTime", 0L)
+            val e = fix?.kwh ?: o.optDouble("energyAdded", Double.NaN)
+            if (start > 0 && end > 0 && !e.isNaN() && e > 0) { odStart = start; odEnd = end; odCost = priceSession(start, end, e, t, fix?.rate); break }
         }
         // a charge you added by hand that is newer than Overdrive's latest (and not the same charge) wins
         val t0 = t.atMeter()
@@ -98,7 +100,7 @@ object CarStatus {
         if (m != null && (odCost == null || m.start > odStart)) {
             val dur = m.end - m.start
             val same = odCost != null && maxOf(0L, minOf(odEnd, m.end) - maxOf(odStart, m.start)) > dur / 2
-            if (!same) return priceSession(m.start, m.end, m.kwh, t0)
+            if (!same) return priceSession(m.start, m.end, m.kwh, t0, m.rate)
         }
         if (arr == null && m == null) return null
         return odCost
