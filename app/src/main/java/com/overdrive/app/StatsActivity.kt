@@ -260,6 +260,10 @@ class StatsActivity : Activity() {
             c.addView(text("${hm.format(Date(r.start))} – ${if (r.inProgress) "now" else hm.format(Date(r.end))} · ${mins / 60}h ${mins % 60}m", 12f, dim).apply { setPadding(0, dp(2), 0, 0) })
             val detail = StringBuilder()
             if (r.kwh != null) detail.append(kwh(r.kwh)) else detail.append("no energy recorded")
+            if (r.kwh != null && r.costPence != null && r.kwh > 0) {
+                val drawn = if (r.manual) r.kwh else r.kwh * 100.0 / Config.tariff(this).effPercent
+                detail.append(" · %.2fp/kWh".format(Locale.US, r.costPence / drawn))
+            }
             r.avgKw?.let { detail.append(" · %.1f kW avg".format(it)) }
             if (r.socStart != null && r.socEnd != null) detail.append(" · ${Math.round(r.socStart)}→${Math.round(r.socEnd)}%")
             c.addView(text(detail.toString(), 12f, if (r.kwh == null) Color.parseColor("#FFC857") else dim).apply { setPadding(0, dp(2), 0, 0) })
