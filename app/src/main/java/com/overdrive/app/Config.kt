@@ -14,16 +14,16 @@ object Config {
     fun setBg(c: Context, v: Int) { prefs(c).edit().putInt("bg", v).apply() }
 
     /** A charge Overdrive missed, entered by hand from the charger app (kWh = energy delivered, i.e. at the meter). */
-    class Manual(val id: Long, val start: Long, val end: Long, val kwh: Double)
+    class Manual(val id: Long, val start: Long, val end: Long, val kwh: Double, val rate: Double? = null)
 
     fun manualSessions(c: Context): List<Manual> = try {
         val a = JSONArray(prefs(c).getString("manual", "[]"))
-        (0 until a.length()).map { val o = a.getJSONObject(it); Manual(o.getLong("id"), o.getLong("s"), o.getLong("e"), o.getDouble("k")) }
+        (0 until a.length()).map { val o = a.getJSONObject(it); Manual(o.getLong("id"), o.getLong("s"), o.getLong("e"), o.getDouble("k"), if (o.has("r")) o.getDouble("r") else null) }
     } catch (_: Exception) { emptyList() }
 
     private fun saveManual(c: Context, list: List<Manual>) {
         val a = JSONArray()
-        list.forEach { a.put(JSONObject().put("id", it.id).put("s", it.start).put("e", it.end).put("k", it.kwh)) }
+        list.forEach { a.put(JSONObject().put("id", it.id).put("s", it.start).put("e", it.end).put("k", it.kwh).also { j -> it.rate?.let { r -> j.put("r", r) } }) }
         prefs(c).edit().putString("manual", a.toString()).apply()
     }
 
@@ -32,21 +32,21 @@ object Config {
 
     fun removeManual(c: Context, id: Long) = saveManual(c, manualSessions(c).filter { it.id != id })
 
-    fun updateManual(c: Context, id: Long, start: Long, end: Long, kwh: Double) =
-        saveManual(c, manualSessions(c).map { if (it.id == id) Manual(id, start, end, kwh) else it })
+    fun updateManual(c: Context, id: Long, start: Long, end: Long, kwh: Double, rate: Double?) =
+        saveManual(c, manualSessions(c).map { if (it.id == id) Manual(id, start, end, kwh, rate) else it })
 
     /** Your corrections to a charge Overdrive recorded (kept on this phone only; the car's own record is untouched). */
-    class Override(val start: Long, val end: Long, val kwh: Double)
+    class Override(val start: Long, val end: Long, val kwh: Double, val rate: Double? = null)
 
     fun overrides(c: Context): Map<Long, Override> = try {
         val o = JSONObject(prefs(c).getString("overrides", "{}")!!)
-        o.keys().asSequence().associate { k -> val v = o.getJSONObject(k); k.toLong() to Override(v.getLong("s"), v.getLong("e"), v.getDouble("k")) }
+        o.keys().asSequence().associate { k -> val v = o.getJSONObject(k); k.toLong() to Override(v.getLong("s"), v.getLong("e"), v.getDouble("k"), if (v.has("r")) v.getDouble("r") else null) }
     } catch (_: Exception) { emptyMap() }
 
     fun setOverride(c: Context, id: Long, v: Override?) {
         val o = JSONObject()
-        overrides(c).filterKeys { it != id }.forEach { (k, x) -> o.put(k.toString(), JSONObject().put("s", x.start).put("e", x.end).put("k", x.kwh)) }
-        if (v != null) o.put(id.toString(), JSONObject().put("s", v.start).put("e", v.end).put("k", v.kwh))
+        overrides(c).filterKeys { it != id }.forEach { (k, x) -> o.put(k.toString(), JSONObject().put("s", x.start).put("e", x.end).put("k", x.kwh).also { j -> x.rate?.let { r -> j.put("r", r) } }) }
+        if (v != null) o.put(id.toString(), JSONObject().put("s", v.start).put("e", v.end).put("k", v.kwh).also { j -> v.rate?.let { r -> j.put("r", r) } })
         prefs(c).edit().putString("overrides", o.toString()).apply()
     }
 

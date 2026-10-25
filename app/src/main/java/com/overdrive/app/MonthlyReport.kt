@@ -106,11 +106,11 @@ object MonthlyReport {
                     if (oe <= os) continue                            // no overlap with this month
                     val part = e * (oe - os).toDouble() / (end - start)
                     charged += part
-                    cost += CarStatus.priceSession(os, oe, part, t)
+                    cost += CarStatus.priceSession(os, oe, part, t, fix?.rate)
                     sessions++
                 } else if (start in from until to) {                  // zero-length session: count it where it began
                     charged += e
-                    cost += CarStatus.priceSession(start, start, e, t)
+                    cost += CarStatus.priceSession(start, start, e, t, fix?.rate)
                     sessions++
                 }
             }
@@ -129,7 +129,7 @@ object MonthlyReport {
             if (oe <= os) continue
             val part = m.kwh * (oe - os).toDouble() / dur
             charged += part
-            cost += CarStatus.priceSession(os, oe, part, t0)
+            cost += CarStatus.priceSession(os, oe, part, t0, m.rate)
             sessions++
         }
         return Summary(km * 0.621371, kwh, charged, cost, trips, sessions)
@@ -138,7 +138,7 @@ object MonthlyReport {
     /** One line of the Charges list. [kwh] is null when Overdrive recorded the session but no energy for it. */
     class ChargeRow(val id: Long, val start: Long, val end: Long, val inProgress: Boolean, val kwh: Double?,
                     val avgKw: Double?, val socStart: Double?, val socEnd: Double?, val costPence: Double?, val manual: Boolean,
-                    val edited: Boolean = false)
+                    val edited: Boolean = false, val rate: Double? = null)
 
     /** Sessions from the last [days] days: Overdrive's own records plus your manual additions, newest first. */
     fun chargeRows(ctx: Context, days: Int): List<ChargeRow>? {
@@ -159,16 +159,16 @@ object MonthlyReport {
             val kw = o.optDouble("avgPower", Double.NaN).takeIf { !it.isNaN() && it > 0 }
             val s0 = o.optDouble("startSoc", Double.NaN).takeIf { !it.isNaN() }
             val s1 = o.optDouble("endSoc", Double.NaN).takeIf { !it.isNaN() }
-            val cost = if (e != null && start > 0 && end > 0) CarStatus.priceSession(start, end, e, t) else null
+            val cost = if (e != null && start > 0 && end > 0) CarStatus.priceSession(start, end, e, t, fix?.rate) else null
             if (e != null && end > start) counted.add(longArrayOf(start, end))
-            rows.add(ChargeRow(o.optLong("id", 0L), start, end, inProg, e, kw, s0, s1, cost, false, fix != null))
+            rows.add(ChargeRow(o.optLong("id", 0L), start, end, inProg, e, kw, s0, s1, cost, false, fix != null, fix?.rate))
         }
         val t0 = t.atMeter()
         val since = System.currentTimeMillis() - days * 86_400_000L
         for (m in Config.manualSessions(ctx)) {
             if (m.end < since) continue
             rows.add(ChargeRow(m.id, m.start, m.end, false, m.kwh, null, null, null,
-                CarStatus.priceSession(m.start, m.end, m.kwh, t0), true))
+                CarStatus.priceSession(m.start, m.end, m.kwh, t0, m.rate), true, m.rate != null, m.rate))
         }
         return rows.sortedByDescending { it.start }
     }

@@ -253,7 +253,7 @@ class StatsActivity : Activity() {
         for (r in list) {
             val c = cardView()
             val head = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL }
-            head.addView(text(day.format(Date(r.start)) + if (r.manual) "  (added by you)" else if (r.edited) "  (edited by you)" else if (r.inProgress) "  (charging now)" else "", 14f, Color.WHITE, true), LinearLayout.LayoutParams(0, -2, 1f))
+            head.addView(text(day.format(Date(r.start)) + if (r.manual) "  (added by you)" else if (r.edited) "  (edited)" else if (r.inProgress) "  (charging now)" else "", 14f, Color.WHITE, true), LinearLayout.LayoutParams(0, -2, 1f))
             head.addView(text(r.costPence?.let { money(it) } ?: "—", 16f, accent, true))
             c.addView(head)
             val mins = Math.max(0L, (r.end - r.start) / 60_000L)
@@ -325,41 +325,71 @@ class StatsActivity : Activity() {
         if (r.inProgress) { Toast.makeText(this, "Wait until the charge has finished to edit it", Toast.LENGTH_SHORT).show(); return }
         val dateF = SimpleDateFormat("yyyy-MM-dd", Locale.US)
         val timeF = SimpleDateFormat("HH:mm", Locale.US)
-        fun field(hint: String, value: String, number: Boolean = false) = EditText(this).apply {
-            this.hint = hint
+        val white = Color.WHITE
+        fun label(t: String) = text(t, 11f, dim, true).apply { setPadding(dp(4), dp(12), 0, dp(4)) }
+        fun field(value: String, hint: String, number: Boolean = false) = EditText(this).apply {
             setText(value)
+            this.hint = hint
+            setHintTextColor(Color.parseColor("#5C738A"))
+            setTextColor(white)
+            textSize = 16f
             setSingleLine()
+            setPadding(dp(14), dp(11), dp(14), dp(11))
+            background = GradientDrawable().apply { setColor(Color.parseColor("#1B3350")); cornerRadius = dp(12).toFloat() }
             if (number) inputType = InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_FLAG_DECIMAL
         }
-        val d = field("Date it started (YYYY-MM-DD)", dateF.format(Date(r.start)))
-        val a = field("Start time (HH:MM)", timeF.format(Date(r.start)))
-        val b = field("End time (HH:MM)", timeF.format(Date(r.end)))
-        val k = field("Energy delivered (kWh)", r.kwh?.let { "%.2f".format(Locale.US, it) } ?: "", number = true)
+        val d = field(dateF.format(Date(r.start)), "YYYY-MM-DD")
+        val a = field(timeF.format(Date(r.start)), "HH:MM")
+        val b = field(timeF.format(Date(r.end)), "HH:MM")
+        val k = field(r.kwh?.let { "%.2f".format(Locale.US, it) } ?: "", "kWh", number = true)
+        val autoP = if (r.kwh != null && r.costPence != null && r.kwh > 0) r.costPence / r.kwh else null
+        val p = field(r.rate?.let { "%.2f".format(Locale.US, it) } ?: "", autoP?.let { "Auto: %.2f from your tariff".format(Locale.US, it) } ?: "Auto from your tariff", number = true)
         val box = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setPadding(dp(20), 0, dp(20), 0)
-            listOf(d, a, b, k).forEach { addView(it) }
+            setPadding(dp(22), dp(20), dp(22), dp(10))
+            background = GradientDrawable().apply { setColor(card); cornerRadius = dp(24).toFloat() }
+            addView(text("Edit charge", 20f, white, true))
+            addView(text(if (r.manual) "Use the figures from your charger app." else "Changes this app's totals only. Overdrive's own record is not touched.", 12f, dim).apply { setPadding(0, dp(2), 0, 0) })
+            addView(label("DATE IT STARTED")); addView(d)
+            addView(LinearLayout(this@StatsActivity).apply {
+                orientation = LinearLayout.HORIZONTAL
+                val l = LinearLayout(this@StatsActivity).apply { orientation = LinearLayout.VERTICAL; addView(label("START")); addView(a) }
+                val m = LinearLayout(this@StatsActivity).apply { orientation = LinearLayout.VERTICAL; addView(label("END")); addView(b) }
+                addView(l, LinearLayout.LayoutParams(0, -2, 1f).apply { rightMargin = dp(6) })
+                addView(m, LinearLayout.LayoutParams(0, -2, 1f).apply { leftMargin = dp(6) })
+            })
+            addView(label("ENERGY (KWH)")); addView(k)
+            addView(label("PRICE (PENCE PER KWH) - LEAVE EMPTY FOR AUTO")); addView(p)
         }
-        val dlg = AlertDialog.Builder(this).setTitle("Edit this charge")
-            .setMessage(if (r.manual) "Use the figures from your charger app." else "Corrects this charge in the app's totals only. Overdrive's own record is not changed.")
-            .setView(box)
-            .setPositiveButton("Save") { _, _ ->
-                try {
-                    val f = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.US)
-                    val start = f.parse(d.text.toString().trim() + " " + a.text.toString().trim())!!.time
-                    var end = f.parse(d.text.toString().trim() + " " + b.text.toString().trim())!!.time
-                    if (end <= start) end += 86_400_000L
-                    val e = k.text.toString().trim().replace(',', '.').toDouble()
-                    if (e <= 0 || e > 300 || end - start > 48 * 3_600_000L || start > System.currentTimeMillis()) throw IllegalArgumentException()
-                    if (r.manual) Config.updateManual(this, r.id, start, end, e) else Config.setOverride(this, r.id, Config.Override(start, end, e))
-                    manualChanged()
-                } catch (_: Exception) {
-                    Toast.makeText(this, "Couldn't save that - check the date, times and kWh", Toast.LENGTH_LONG).show()
-                }
+        fun btn(t: String, color: Int, onClick: () -> Unit) = text(t, 14f, color, true).apply {
+            gravity = Gravity.CENTER
+            setPadding(dp(16), dp(10), dp(16), dp(10))
+            setOnClickListener { onClick() }
+        }
+        val dlg = AlertDialog.Builder(this).setView(ScrollView(this).apply { addView(box) }).create()
+        dlg.window?.setBackgroundDrawable(GradientDrawable().apply { setColor(Color.TRANSPARENT) })
+        val bar = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL; setPadding(0, dp(14), 0, 0) }
+        if (r.manual) bar.addView(btn("Remove", Color.parseColor("#FF7A7A")) { Config.removeManual(this, r.id); manualChanged(); dlg.dismiss() })
+        else if (r.edited) bar.addView(btn("Undo edit", Color.parseColor("#FFC857")) { Config.setOverride(this, r.id, null); manualChanged(); dlg.dismiss() })
+        bar.addView(View(this), LinearLayout.LayoutParams(0, 1, 1f))
+        bar.addView(btn("Cancel", dim) { dlg.dismiss() })
+        bar.addView(btn("Save", Color.BLACK) {
+            try {
+                val f = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.US)
+                val start = f.parse(d.text.toString().trim() + " " + a.text.toString().trim())!!.time
+                var end = f.parse(d.text.toString().trim() + " " + b.text.toString().trim())!!.time
+                if (end <= start) end += 86_400_000L
+                val e = k.text.toString().trim().replace(',', '.').toDouble()
+                val rate = p.text.toString().trim().replace(',', '.').takeIf { it.isNotEmpty() }?.toDouble()
+                if (e <= 0 || e > 300 || end - start > 48 * 3_600_000L || start > System.currentTimeMillis() || (rate != null && (rate < 0 || rate > 1000))) throw IllegalArgumentException()
+                if (r.manual) Config.updateManual(this, r.id, start, end, e, rate) else Config.setOverride(this, r.id, Config.Override(start, end, e, rate))
+                manualChanged()
+                dlg.dismiss()
+            } catch (_: Exception) {
+                Toast.makeText(this, "Couldn't save that - check the date, times, kWh and price", Toast.LENGTH_LONG).show()
             }
-            .setNegativeButton("Cancel", null)
-        if (r.manual) dlg.setNeutralButton("Remove") { _, _ -> Config.removeManual(this, r.id); manualChanged() }
-        else if (r.edited) dlg.setNeutralButton("Undo my edit") { _, _ -> Config.setOverride(this, r.id, null); manualChanged() }
+        }.apply { background = GradientDrawable().apply { setColor(accent); cornerRadius = dp(14).toFloat() } })
+        box.addView(bar)
         dlg.show()
     }
 
