@@ -8,6 +8,7 @@ import com.google.mlkit.vision.text.TextRecognition
 import com.google.mlkit.vision.text.latin.TextRecognizerOptions
 import com.sudokuoverlay.core.BoardCanvas
 import com.sudokuoverlay.core.CellExtractor
+import com.sudokuoverlay.core.DigitGuess
 import com.sudokuoverlay.core.DigitMap
 import com.sudokuoverlay.core.Gray
 import com.sudokuoverlay.core.Grid
@@ -51,10 +52,13 @@ class BoardReader {
             val d = DigitMap.digitOf(c.ch)
             if (d > 0 && crops[i] != null && board[i] == 0) board[i] = d
         }
+        val known = ArrayList<Pair<Int, Gray>>()
+        for (i in 0 until 81) if (board[i] != 0) known.add(board[i] to crops[i]!!)
         for (i in 0 until 81) {
             if (crops[i] == null || board[i] != 0) continue
             val d = recognize(s.single(crops[i]!!)).firstNotNullOfOrNull { DigitMap.digitOf(it.ch).takeIf { v -> v > 0 } }
-            if (d == null) return Result(grid, null, null, "Couldn't read the digit at row ${i / 9 + 1}, column ${i % 9 + 1}")
+                ?: DigitGuess.guess(crops[i]!!, known)
+                ?: return Result(grid, null, null, "Couldn't read the digit at row ${i / 9 + 1}, column ${i % 9 + 1}")
             board[i] = d
         }
         return Result(grid, board, findPad(lum, w, h, grid), null)

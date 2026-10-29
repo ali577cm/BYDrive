@@ -153,3 +153,32 @@ object BoardCanvas {
         return Gray(tw, targetH, out)
     }
 }
+
+/** Fallback for digits the OCR engine returns nothing for (it often drops a lone "1"). */
+object DigitGuess {
+    private const val W = 48
+
+    private fun norm(g: Gray): IntArray {
+        val s = BoardCanvas.scaleToHeight(g, BoardCanvas.DIGIT_H)
+        val out = IntArray(W * BoardCanvas.DIGIT_H) { 255 }
+        val ox = (W - minOf(W, s.w)) / 2
+        for (y in 0 until s.h) for (x in 0 until minOf(W, s.w)) out[y * W + ox + x] = s.px[y * s.w + x]
+        return out
+    }
+
+    /** [known] are glyphs already read from this board, with their digit. Returns 1..9 or null. */
+    fun guess(g: Gray, known: List<Pair<Int, Gray>>): Int? {
+        if (g.w.toDouble() / g.h < 0.5 && known.none { it.first == 1 && it.second.w.toDouble() / it.second.h >= 0.5 }) return 1
+        if (known.isEmpty()) return null
+        val a = norm(g)
+        var best = Int.MAX_VALUE
+        var digit: Int? = null
+        for ((d, k) in known) {
+            val b = norm(k)
+            var sum = 0
+            for (i in a.indices) { val diff = a[i] - b[i]; sum += diff * diff / 255 }
+            if (sum < best) { best = sum; digit = d }
+        }
+        return digit
+    }
+}

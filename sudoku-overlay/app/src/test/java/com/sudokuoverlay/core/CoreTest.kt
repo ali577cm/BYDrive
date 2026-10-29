@@ -65,4 +65,19 @@ class CoreTest {
             o.write("P5 ${c.w} ${c.h} 255\n".toByteArray()); o.write(ByteArray(c.px.size) { c.px[it].toByte() })
         }
     }
+
+    @Test fun guessesDigitsFromOtherGlyphs() {
+        val (lum, w, h) = loadLum()
+        val grid = GridFinder.find(lum, w, h)!!
+        val crops = Array(81) { CellExtractor.extract(lum, w, h, grid, it / 9, it % 9) }
+        var wrong = 0; var total = 0
+        for (i in 0 until 81) {
+            val g = crops[i] ?: continue
+            val known = (0 until 81).filter { it != i && crops[it] != null }.map { sample[it] to crops[it]!! }
+            total++
+            if (DigitGuess.guess(g, known) != sample[i]) wrong++
+        }
+        println("guess wrong=$wrong of $total")
+        assertTrue(wrong <= 1)
+    }
 }
