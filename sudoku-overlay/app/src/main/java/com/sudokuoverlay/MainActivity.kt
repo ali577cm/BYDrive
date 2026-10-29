@@ -28,7 +28,10 @@ class MainActivity : Activity() {
         col.addView(button("1. Allow drawing over other apps") {
             startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName")))
         })
-        col.addView(button("2. Turn on Auto-fill (Accessibility)") {
+        col.addView(button("2a. If 2b is greyed out: App info, tap the 3 dots, Allow restricted settings") {
+            startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:$packageName")))
+        })
+        col.addView(button("2b. Turn on Auto-fill (Accessibility > Installed apps > Sudoku Overlay)") {
             startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
         })
         col.addView(button("3. Start overlay") { start() })
@@ -41,7 +44,7 @@ class MainActivity : Activity() {
         val overlay = Settings.canDrawOverlays(this)
         val fill = AutoFillService.instance != null
         info.text = "Overlay permission: ${if (overlay) "OK" else "needed (step 1)"}\n" +
-            "Auto-fill: ${if (fill) "on" else "off (step 2, optional: without it you only get the green answers)"}\n\n" +
+            "Auto-fill: ${if (fill) "ON, the Fill button will work" else "OFF. Do step 2a then 2b, until then Fill can't tap"}\n\n" +
             "Then open your Sudoku app, and use the floating bar:\n" +
             "• Solve: shows the missing digits in green\n" +
             "• Fill: types every answer for you\n" +
