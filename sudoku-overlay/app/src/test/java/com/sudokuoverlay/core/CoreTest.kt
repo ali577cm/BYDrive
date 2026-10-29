@@ -1,7 +1,8 @@
 package com.sudokuoverlay.core
 
 import java.io.File
-import javax.imageio.ImageIO
+import java.io.DataInputStream
+import java.util.zip.GZIPInputStream
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
@@ -15,14 +16,11 @@ class CoreTest {
         "009007523" + "740903650" + "090560708" + "605708900").map { it - '0' }.toIntArray()
 
     private fun loadLum(): Triple<IntArray, Int, Int> {
-        val img = ImageIO.read(javaClass.getResourceAsStream("/sample_board.jpg"))
-        val w = img.width; val h = img.height
-        val lum = IntArray(w * h)
-        for (y in 0 until h) for (x in 0 until w) {
-            val p = img.getRGB(x, y)
-            lum[y * w + x] = (((p shr 16) and 255) * 299 + ((p shr 8) and 255) * 587 + (p and 255) * 114) / 1000
+        DataInputStream(GZIPInputStream(javaClass.getResourceAsStream("/sample_lum.gz"))).use { i ->
+            val w = i.readInt(); val h = i.readInt()
+            val raw = ByteArray(w * h); i.readFully(raw)
+            return Triple(IntArray(w * h) { raw[it].toInt() and 255 }, w, h)
         }
-        return Triple(lum, w, h)
     }
 
     @Test fun solverSolvesSample() {
@@ -61,13 +59,10 @@ class CoreTest {
         val expected = IntArray(81) { if (sample[it] != 0) 1 else 0 }
         assertArrayEquals(expected, found)
 
+        val c = BoardCanvas.build(crops)
         val out = File("build/test-out"); out.mkdirs()
-        writePng(BoardCanvas.build(crops), File(out, "canvas.png"))
-    }
-
-    private fun writePng(g: Gray, f: File) {
-        val img = java.awt.image.BufferedImage(g.w, g.h, java.awt.image.BufferedImage.TYPE_INT_RGB)
-        for (y in 0 until g.h) for (x in 0 until g.w) { val v = g.px[y * g.w + x]; img.setRGB(x, y, (v shl 16) or (v shl 8) or v) }
-        ImageIO.write(img, "png", f)
+        File(out, "canvas.pgm").outputStream().use { o ->
+            o.write("P5 ${c.w} ${c.h} 255\n".toByteArray()); o.write(ByteArray(c.px.size) { c.px[it].toByte() })
+        }
     }
 }
