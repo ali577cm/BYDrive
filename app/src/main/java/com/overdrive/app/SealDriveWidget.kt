@@ -61,7 +61,11 @@ open class SealDriveWidget : AppWidgetProvider() {
                     1 -> R.drawable.widget_bg_glass
                     else -> R.drawable.widget_bg
                 })
-                setTextViewText(R.id.widget_range, if (compact) p.getString("rangeS", "") else p.getString("range", ""))
+                val okAt = p.getLong("okAt", 0L)
+                val stale = okAt > 0 && (p.contains("err") || System.currentTimeMillis() - okAt > 30 * 60_000L)
+                setTextViewText(R.id.widget_range, if (stale) "old " + DateFormat.getTimeInstance(DateFormat.SHORT).format(Date(okAt))
+                    else if (compact) p.getString("rangeS", "") else p.getString("range", ""))
+                setTextColor(R.id.widget_range, Color.parseColor(if (stale) WARN else DIM))
                 setTextViewText(R.id.chip_avg_cap, if (compact) p.getString("capS", "no charge") else p.getString("cap", "Avg / day"))
                 setImageViewResource(R.id.chip_lock_icon, if (p.getBoolean("unlocked", false)) R.drawable.ic_lock_open else R.drawable.ic_lock)
                 for (i in VAL_IDS.indices) {
@@ -82,6 +86,21 @@ open class SealDriveWidget : AppWidgetProvider() {
         }
 
         private const val JOB_ID = 4201
+        private const val NOW_JOB_ID = 4202
+
+        /** Refresh now, in a job (a broadcast receiver is killed after ~10 s, too short for a slow car connection). */
+        fun refreshSoon(ctx: Context) {
+            val b = JobInfo.Builder(NOW_JOB_ID, ComponentName(ctx, RefreshJobService::class.java))
+                .setRequiredNetworkType(JobInfo.NETWORK_TYPE_ANY)
+            if (android.os.Build.VERSION.SDK_INT >= 31) b.setExpedited(true) else b.setOverrideDeadline(0)
+            try {
+                ctx.getSystemService(JobScheduler::class.java).schedule(b.build())
+            } catch (_: Exception) {
+                ctx.getSystemService(JobScheduler::class.java).schedule(
+                    JobInfo.Builder(NOW_JOB_ID, ComponentName(ctx, RefreshJobService::class.java))
+                        .setRequiredNetworkType(JobInfo.NETWORK_TYPE_ANY).setOverrideDeadline(0).build())
+            }
+        }
 
         fun hasWidgets(ctx: Context): Boolean = hasMainWidgets(ctx)
 
@@ -125,10 +144,11 @@ open class SealDriveWidget : AppWidgetProvider() {
 
         private fun store(ctx: Context, r: CarStatus.Result) {
             when (r) {
-                is CarStatus.Result.NoAddress -> save(ctx, "Set address in app", -1, "", false, blank())
-                is CarStatus.Result.SignIn -> save(ctx, "Sign in via app (${r.why})", -1, "", false, blank())
-                is CarStatus.Result.Offline -> save(ctx, "Offline: ${r.why}", -1, "", false, blank())
-                is CarStatus.Result.NoData -> save(ctx, "No data: ${r.why}", -1, "", false, blank())
+                // a failed refresh keeps the last good numbers on screen; the widget just marks them as old
+                is CarStatus.Result.NoAddress -> prefs(ctx).edit().putString("err", "Set address in app").apply()
+                is CarStatus.Result.SignIn -> prefs(ctx).edit().putString("err", "Sign in via app (${r.why})").apply()
+                is CarStatus.Result.Offline -> prefs(ctx).edit().putString("err", "Offline: ${r.why}").apply()
+                is CarStatus.Result.NoData -> prefs(ctx).edit().putString("err", "No data: ${r.why}").apply()
                 is CarStatus.Result.Ok -> {
                     val s = r.s
                     val lock = when {
@@ -159,6 +179,7 @@ open class SealDriveWidget : AppWidgetProvider() {
                     val sub = if (s.charging && sessCost != null) "Session $sessCost · ${"%.1f".format(s.chargeSessionKwh)} kWh"
                         else "Updated ${time()}"
                     val stripCharge = if (s.charging) "⚡ " + (etaTight(s.chargeEtaMin) ?: "Charging") + (sessCost?.let { " · $it" } ?: "") else null
+                    prefs(ctx).edit().putLong("okAt", System.currentTimeMillis()).remove("err").apply()
                     save(ctx, sub, s.soc?.toInt() ?: -1, rangeFull,
                         s.locked == 2 && s.doorsOpen == 0, listOf(lock, win, sentry, avg), cap, capS, stripCharge ?: (miles ?: ""), stripEnergy)
                 }
@@ -181,20 +202,12 @@ open class SealDriveWidget : AppWidgetProvider() {
         super.onReceive(ctx, intent)
         when (intent.action) {
             ACTION_REFRESH -> {
-                val pending = goAsync()
                 push(ctx, true)
-                thread {
-                    try { refreshNow(ctx) } finally { pending.finish() }
-                }
+                refreshSoon(ctx)
             }
             AppWidgetManager.ACTION_APPWIDGET_UPDATE, AppWidgetManager.ACTION_APPWIDGET_ENABLED -> {
                 // widget just added / redrawn: fetch if the data is more than 2 minutes old
-                if (System.currentTimeMillis() - prefs(ctx).getLong("fetched", 0L) > 2 * 60_000L) {
-                    val pending = goAsync()
-                    thread {
-                        try { refreshNow(ctx) } finally { pending.finish() }
-                    }
-                }
+                if (System.currentTimeMillis() - prefs(ctx).getLong("fetched", 0L) > 2 * 60_000L) refreshSoon(ctx)
             }
         }
     }
