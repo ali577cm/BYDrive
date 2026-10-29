@@ -255,6 +255,7 @@ class OverlayService : Service() {
             steps.add(AutoFillService.Step(PointF(s.grid.centerX(i % 9).toFloat(), s.grid.centerY(i / 9).toFloat()), pad[s.solved[i] - 1]))
         }
         if (steps.isEmpty()) return say("Nothing left to fill")
+        steps.shuffle() // random order, not top-left to bottom-right
         busy = true
         bar?.visibility = View.INVISIBLE
         svc.fill(steps) { ok ->

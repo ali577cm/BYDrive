@@ -19,8 +19,8 @@ class AutoFillService : AccessibilityService() {
     companion object {
         @Volatile var instance: AutoFillService? = null
         private const val TAP_MS = 12L      // how long each tap lasts
-        private const val TAP_GAP = 38L     // time between consecutive taps inside a gesture
-        private const val PAIRS_PER_GESTURE = 5
+        private const val JITTER_PX = 14f  // each tap lands up to this far from the centre
+        private val rnd = java.util.Random()
     }
 
     private val main = Handler(Looper.getMainLooper())
@@ -41,20 +41,24 @@ class AutoFillService : AccessibilityService() {
     private fun next(steps: List<Step>, from: Int, onDone: (Boolean) -> Unit) {
         if (cancelled) return onDone(false)
         if (from >= steps.size) return onDone(true)
-        val to = minOf(steps.size, from + PAIRS_PER_GESTURE)
+        val to = minOf(steps.size, from + 3 + rnd.nextInt(4)) // 3-6 pairs per gesture
         val g = GestureDescription.Builder()
         var t = 0L
         for (i in from until to) {
-            g.addStroke(tap(steps[i].cell, t)); t += TAP_GAP
-            g.addStroke(tap(steps[i].pad, t)); t += TAP_GAP
+            g.addStroke(tap(steps[i].cell, t)); t += 30 + rnd.nextInt(30)
+            g.addStroke(tap(steps[i].pad, t)); t += 30 + rnd.nextInt(45)
         }
         val ok = dispatchGesture(g.build(), object : GestureResultCallback() {
-            override fun onCompleted(gestureDescription: GestureDescription?) = next(steps, to, onDone)
+            override fun onCompleted(gestureDescription: GestureDescription?) {
+                main.postDelayed({ next(steps, to, onDone) }, rnd.nextInt(60).toLong())
+            }
             override fun onCancelled(gestureDescription: GestureDescription?) = onDone(false)
         }, main)
         if (!ok) onDone(false)
     }
 
     private fun tap(p: PointF, start: Long) =
-        GestureDescription.StrokeDescription(Path().apply { moveTo(p.x, p.y) }, start, TAP_MS)
+        GestureDescription.StrokeDescription(
+            Path().apply { moveTo(p.x + (rnd.nextFloat() * 2 - 1) * JITTER_PX, p.y + (rnd.nextFloat() * 2 - 1) * JITTER_PX) },
+            start, TAP_MS + rnd.nextInt(10))
 }
