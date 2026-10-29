@@ -191,7 +191,10 @@ class PetService : Service() {
                 CarCommand.showMessage(this, "${PetMode.NAME} is OK", "Dog mode is on. The car is kept at ${PetMode.TEMP_C.toInt()}°. Back soon.", 330)
             }
             update()
-        } catch (_: Exception) {
+        } catch (e: Exception) {
+            // show what went wrong instead of staying on "Starting…"
+            PetMode.edit(this).putString("note", "error: ${e.javaClass.simpleName} ${e.message ?: ""}".take(60)).apply()
+            try { update() } catch (_: Exception) {}
         } finally {
             busy.set(false)
         }
@@ -199,7 +202,8 @@ class PetService : Service() {
 
     private fun update() {
         val c = PetMode.cabin(this)
-        goForeground(if (c != null) "cabin $c" else PetMode.note(this))
+        val at = java.text.DateFormat.getTimeInstance(java.text.DateFormat.SHORT).format(java.util.Date())
+        goForeground((if (c != null) "cabin $c" else "no cabin reading") + " · " + PetMode.note(this) + " · checked $at")
         SealDrivePetWidget.redraw(this)
     }
 
