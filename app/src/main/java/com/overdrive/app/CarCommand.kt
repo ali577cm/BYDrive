@@ -16,18 +16,18 @@ object CarCommand {
     class Outcome(val ok: Boolean, val message: String, val path: String = "")   // path: how Overdrive sent it ("cloud" or "sdk" = local)
 
     /** POSTs [body] as JSON to [path] on the configured Overdrive address and reports whether the car accepted it. */
-    private fun post(ctx: Context, path: String, body: JSONObject): Outcome {
+    private fun post(ctx: Context, path: String, body: JSONObject, readMs: Int = 15000): Outcome {
         // a sleeping car can take a while to wake its head unit and Tailscale, so try a few times before saying "Offline"
         var last = Outcome(false, "Offline")
         for (attempt in 0 until 3) {
-            last = postOnce(ctx, path, body)
-            if (last.message != "Offline") break
+            last = postOnce(ctx, path, body, readMs)
+            if (!last.message.startsWith("Offline")) break
             if (attempt < 2) try { Thread.sleep(6000) } catch (_: InterruptedException) { return last }
         }
         return last
     }
 
-    private fun postOnce(ctx: Context, path: String, body: JSONObject): Outcome {
+    private fun postOnce(ctx: Context, path: String, body: JSONObject, readMs: Int): Outcome {
         val base = Config.url(ctx) ?: return Outcome(false, "Set address in app")
         val cookie = CookieManager.getInstance().getCookie(base)
         if (cookie.isNullOrEmpty()) return Outcome(false, "Sign in via app")
@@ -35,7 +35,7 @@ object CarCommand {
             val c = URL(base.trimEnd('/') + path).openConnection() as HttpURLConnection
             c.instanceFollowRedirects = false
             c.connectTimeout = 8000
-            c.readTimeout = 10000
+            c.readTimeout = readMs
             c.requestMethod = "POST"
             c.doOutput = true
             c.setRequestProperty("Cookie", cookie)
@@ -50,7 +50,7 @@ object CarCommand {
             if (j.optBoolean("success", false)) Outcome(true, "Sent", j.optString("path", ""))
             else Outcome(false, j.optString("error", j.optString("reason", "Failed")).ifEmpty { "Failed" }.take(40))
         } catch (e: IOException) {
-            Outcome(false, "Offline")
+            Outcome(false, "Offline (${e.javaClass.simpleName.removeSuffix("Exception")})")
         }
     }
 
@@ -61,7 +61,7 @@ object CarCommand {
     /** Turns the climate ON at [tempC] for [minutes] (Overdrive allows 10, 15, 20, 25 or 30). */
     fun startClimate(ctx: Context, tempC: Double, minutes: Int): Outcome {
         val r = post(ctx, "/api/vehicle/climate",
-            JSONObject().put("action", "power_on").put("temp", tempC).put("remoteDurationMinutes", minutes))
+            JSONObject().put("action", "power_on").put("temp", tempC).put("remoteDurationMinutes", minutes), 70_000)
         return if (r.ok) Outcome(true, "On", r.path) else r
     }
 
