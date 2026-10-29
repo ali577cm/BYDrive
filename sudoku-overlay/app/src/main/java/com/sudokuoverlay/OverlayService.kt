@@ -228,6 +228,7 @@ class OverlayService : Service() {
         val board = res?.board
         val grid = res?.grid
         if (res == null || board == null || grid == null) return finish(res?.error ?: "Couldn't read the screen")
+        if (SudokuSolver.countSolutions(board) > 1) return finish("The board has more than one solution, so a digit was misread. Try Solve again")
         val solved = SudokuSolver.solve(board)
             ?: return finish("No solution: a digit was probably misread, or a wrong entry is on the board")
         val s = Solution(grid, board, solved, res.pad)

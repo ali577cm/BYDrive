@@ -18,7 +18,7 @@ class AutoFillService : AccessibilityService() {
 
     companion object {
         @Volatile var instance: AutoFillService? = null
-        private const val TAP_MS = 12L      // how long each tap lasts
+        private const val TAP_MS = 40L      // how long each tap lasts
         private const val JITTER_PX = 14f  // each tap lands up to this far from the centre
         private val rnd = java.util.Random()
     }
@@ -41,16 +41,16 @@ class AutoFillService : AccessibilityService() {
     private fun next(steps: List<Step>, from: Int, onDone: (Boolean) -> Unit) {
         if (cancelled) return onDone(false)
         if (from >= steps.size) return onDone(true)
-        val to = minOf(steps.size, from + 3 + rnd.nextInt(4)) // 3-6 pairs per gesture
+        val to = minOf(steps.size, from + 2) // 2 pairs per gesture
         val g = GestureDescription.Builder()
         var t = 0L
         for (i in from until to) {
-            g.addStroke(tap(steps[i].cell, t)); t += 30 + rnd.nextInt(30)
-            g.addStroke(tap(steps[i].pad, t)); t += 30 + rnd.nextInt(45)
+            g.addStroke(tap(steps[i].cell, t)); t += 110 + rnd.nextInt(40)  // let the game select the cell before the number
+            g.addStroke(tap(steps[i].pad, t)); t += 90 + rnd.nextInt(40)
         }
         val ok = dispatchGesture(g.build(), object : GestureResultCallback() {
             override fun onCompleted(gestureDescription: GestureDescription?) {
-                main.postDelayed({ next(steps, to, onDone) }, rnd.nextInt(60).toLong())
+                main.postDelayed({ next(steps, to, onDone) }, 40L + rnd.nextInt(60))
             }
             override fun onCancelled(gestureDescription: GestureDescription?) = onDone(false)
         }, main)

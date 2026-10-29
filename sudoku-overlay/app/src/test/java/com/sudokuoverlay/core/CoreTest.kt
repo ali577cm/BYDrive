@@ -80,4 +80,10 @@ class CoreTest {
         println("guess wrong=$wrong of $total")
         assertTrue(wrong <= 1)
     }
+
+    @Test fun countsSolutions() {
+        assertEquals(1, SudokuSolver.countSolutions(sample))
+        val loose = sample.copyOf(); for (i in 0 until 30) loose[i] = 0
+        assertEquals(2, SudokuSolver.countSolutions(loose))
+    }
 }

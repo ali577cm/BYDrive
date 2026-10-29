@@ -61,6 +61,16 @@ class BoardReader {
                 ?: return Result(grid, null, null, "Couldn't read the digit at row ${i / 9 + 1}, column ${i % 9 + 1}")
             board[i] = d
         }
+        // Second opinion on every digit: compare its shape with all the other digits read on this board.
+        // Where the two disagree, read that cell again on its own and take the answer that gets a second vote.
+        val all = (0 until 81).filter { board[it] != 0 }
+        for (i in all) {
+            val g = crops[i] ?: continue
+            val guess = DigitGuess.guess(g, all.filter { it != i }.map { board[it] to crops[it]!! }) ?: continue
+            if (guess == board[i]) continue
+            val again = recognize(s.single(g)).firstNotNullOfOrNull { DigitMap.digitOf(it.ch).takeIf { v -> v > 0 } }
+            board[i] = when (again) { guess -> guess; board[i] -> board[i]; else -> guess }
+        }
         return Result(grid, board, findPad(lum, w, h, grid), null)
     }
 
