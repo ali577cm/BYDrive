@@ -14,11 +14,16 @@ object CarState {
         val doorsOpen: Int = 0,    // number of open doors
     )
 
+    /** Why the last [read] returned null (for the pet-mode notification). */
+    @Volatile var lastWhy: String = ""
+
     /** Returns null when the car/Overdrive cannot be reached or the login is missing. Blocking. */
     fun read(ctx: Context): Snap? {
-        val (base, cookie) = CarStatus.auth(ctx) ?: return null
-        val j = CarStatus.getJson(base, "/api/vehicle/state", cookie, 8000) ?: return null
-        if (!j.optBoolean("success", false)) return null
+        val (base, cookie) = CarStatus.auth(ctx) ?: run { lastWhy = "no address or login in the app"; return null }
+        val (j, why) = CarStatus.getWithReason(base, "/api/vehicle/state", cookie, 8000)
+        if (j == null) { lastWhy = why; return null }
+        if (!j.optBoolean("success", false)) { lastWhy = "car data unavailable: " + j.optString("error", "").take(30); return null }
+        lastWhy = ""
         val climate = j.optJSONObject("climate")
         val setting = j.optJSONObject("setting")
         return Snap(

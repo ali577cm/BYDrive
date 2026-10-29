@@ -175,6 +175,18 @@ object CarStatus {
         return if (cookie.isNullOrEmpty()) null else base to cookie
     }
 
+    /** Like [getJson] but also says why it failed (empty when it worked). */
+    internal fun getWithReason(base: String, path: String, cookie: String, readMs: Int = 4000): Pair<JSONObject?, String> {
+        val r = get(base, path, cookie, readMs) ?: return null to "no response"
+        return when {
+            r.code == -1 -> null to (r.err ?: "no connection")
+            r.code == 401 || r.code == 403 || r.code in 300..399 -> null to "sign in needed (HTTP ${r.code})"
+            r.code != 200 -> null to "HTTP ${r.code}"
+            r.json == null -> null to "got a web page, sign in needed"
+            else -> r.json to ""
+        }
+    }
+
     /** GET returning parsed JSON, or null on any failure (network, login, non-JSON). */
     internal fun getJson(base: String, path: String, cookie: String, readMs: Int = 20000): JSONObject? = get(base, path, cookie, readMs)?.json
 

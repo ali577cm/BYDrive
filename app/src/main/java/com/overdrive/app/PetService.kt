@@ -38,7 +38,7 @@ object PetMode {
 
     private fun start(ctx: Context) {
         edit(ctx).putBoolean("active", true).putBoolean("sawLocked", false).putLong("lastSend", 0L)
-            .putInt("fails", 0).putLong("lastMaintain", 0L).putInt("cpdBefore", -1).putBoolean("dashBlanked", false).putString("cabin", null).putString("note", "Starting…").apply()
+            .putInt("fails", 0).putLong("lastMaintain", 0L).putInt("cpdBefore", -1).putLong("lastTry", 0L).putBoolean("dashBlanked", false).putString("cabin", null).putString("note", "Starting…").apply()
         ctx.startForegroundService(Intent(ctx, PetService::class.java).setAction(PetService.ACTION_START))
         SealDrivePetWidget.redraw(ctx)
     }
@@ -144,13 +144,24 @@ class PetService : Service() {
         try {
             if (!PetMode.isActive(this)) return
             val p = PetMode.p(this)
-            val s = CarState.read(this)
+            var s = CarState.read(this)
+            if (s == null) { try { Thread.sleep(4000) } catch (_: InterruptedException) {}; s = CarState.read(this) }
             if (s == null) {
                 val fails = p.getInt("fails", 0) + 1
-                PetMode.edit(this).putInt("fails", fails).putString("note", "can't reach car").apply()
+                val why = CarState.lastWhy
+                // the state could not be read, but the AC command may still get through (and wake the car), so try it
+                val now0 = System.currentTimeMillis()
+                var note = "can't reach car: $why"
+                if (now0 - p.getLong("lastTry", 0L) >= PetMode.MAINTAIN_MS) {
+                    PetMode.edit(this).putLong("lastTry", now0).apply()
+                    val r = CarCommand.startClimate(this, PetMode.TEMP_C, PetMode.CLIMATE_MINUTES)
+                    if (r.ok) { PetMode.edit(this).putLong("lastSend", now0).apply(); note = "AC sent, car state unreadable" + (if (r.path.isNotEmpty()) " (${r.path})" else "") }
+                    else note = "can't reach car: $why; AC: ${r.message}"
+                }
+                PetMode.edit(this).putInt("fails", fails).putString("note", note.take(80)).apply()
                 if (fails == 20 || (fails > 20 && (fails - 20) % 40 == 0))        // ~10 min, then every ~20 min
                     alert("Pet mode: can't reach the car",
-                        "BYDrive has not been able to talk to the car for a while. Check Tailscale and your signal - the AC may stop soon.")
+                        "BYDrive has not been able to talk to the car for a while ($why). Check Tailscale and your signal - the AC may stop soon.")
                 update(); return
             }
             PetMode.edit(this).putInt("fails", 0).putString("cabin", s.insideC?.let { CarState.fmtTemp(it) }).apply()
