@@ -144,9 +144,9 @@ class PetService : Service() {
         try {
             if (!PetMode.isActive(this)) return
             val p = PetMode.p(this)
-            var s = CarState.read(this)
-            if (s == null) { try { Thread.sleep(4000) } catch (_: InterruptedException) {}; s = CarState.read(this) }
-            if (s == null) {
+            var s0 = CarState.read(this)
+            if (s0 == null) { try { Thread.sleep(4000) } catch (_: InterruptedException) {}; s0 = CarState.read(this) }
+            val s = s0 ?: run {
                 val fails = p.getInt("fails", 0) + 1
                 val why = CarState.lastWhy
                 // the state could not be read, but the AC command may still get through (and wake the car), so try it
