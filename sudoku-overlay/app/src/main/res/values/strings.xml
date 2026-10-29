@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">Sudoku Overlay</string>
+    <string name="autofill_description">Taps the empty Sudoku cells and number buttons for you when you press Fill in the floating bar. It never reads screen content.</string>
+</resources>
