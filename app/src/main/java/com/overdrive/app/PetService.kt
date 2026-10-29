@@ -38,7 +38,7 @@ object PetMode {
 
     private fun start(ctx: Context) {
         edit(ctx).putBoolean("active", true).putBoolean("sawLocked", false).putLong("lastSend", 0L)
-            .putInt("fails", 0).putLong("lastMaintain", 0L).putInt("cpdBefore", -1).putString("cabin", null).putString("note", "Starting…").apply()
+            .putInt("fails", 0).putLong("lastMaintain", 0L).putInt("cpdBefore", -1).putBoolean("dashBlanked", false).putString("cabin", null).putString("note", "Starting…").apply()
         ctx.startForegroundService(Intent(ctx, PetService::class.java).setAction(PetService.ACTION_START))
         SealDrivePetWidget.redraw(ctx)
     }
@@ -184,6 +184,10 @@ class PetService : Service() {
                         if (s.acOn != true) alert("Pet mode: AC did not start", "The car refused the climate command (${r.message}). Check on your pet.")
                     }
                 }
+                if (Config.petBlankDash(this)) {
+                    val b = CarCommand.setClusterBrightness(this, 0)
+                    PetMode.edit(this).putBoolean("dashBlanked", b.ok || p.getBoolean("dashBlanked", false)).apply()
+                }
                 CarCommand.showMessage(this, "${PetMode.NAME} is OK", "Dog mode is on. The car is kept at ${PetMode.TEMP_C.toInt()}°. Back soon.", 330)
             }
             update()
@@ -204,6 +208,11 @@ class PetService : Service() {
         val cpdBefore = p.getInt("cpdBefore", -1)
         PetMode.edit(this).putBoolean("active", false).putString("note", reason).apply()
         lock?.let { if (it.isHeld) it.release() }
+        // bring the dashboard back before anything else, so it is normal again as soon as you are in the car
+        if (p.getBoolean("dashBlanked", false)) {
+            CarCommand.setClusterBrightness(this, Config.dashRestore(this))
+            PetMode.edit(this).putBoolean("dashBlanked", false).apply()
+        }
         var failedOff = false
         if (stopAc) failedOff = !CarCommand.stopClimate(this).ok
         if (cpdBefore == 1) CarCommand.setChildPresenceDetection(this, 1)     // put Child Presence Detection back

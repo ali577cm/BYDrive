@@ -75,4 +75,8 @@ object CarCommand {
     fun showMessage(ctx: Context, title: String, message: String, timeoutSec: Int): Outcome =
         post(ctx, "/api/vehicle/message", JSONObject().put("kind", "dialog").put("title", title).put("message", message)
             .put("button", "OK").put("severity", "info").put("timeoutSec", timeoutSec))
+
+    /** Sets the driver dashboard (instrument cluster) brightness, 0-100, through Overdrive. */
+    fun setClusterBrightness(ctx: Context, percent: Int): Outcome =
+        post(ctx, "/api/vehicle/media", JSONObject().put("target", "cluster_brightness").put("value", percent.coerceIn(0, 100)))
 }

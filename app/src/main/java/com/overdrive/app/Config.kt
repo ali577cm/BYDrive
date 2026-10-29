@@ -50,6 +50,16 @@ object Config {
         prefs(c).edit().putString("overrides", o.toString()).apply()
     }
 
+    /** Pet mode blanks the driver's dashboard (brightness 0) so it is not on show, then restores this level (0-100). */
+    fun petBlankDash(c: Context): Boolean = prefs(c).getBoolean("petBlank", true)
+    fun dashRestore(c: Context): Int = prefs(c).getInt("dashRestore", 70)
+    fun setPetDash(c: Context, blank: Boolean, restore: String): String? {
+        val r = restore.trim().toIntOrNull()
+        if (r == null || r < 10 || r > 100) return "Dashboard brightness not saved (use 10 to 100)"
+        prefs(c).edit().putBoolean("petBlank", blank).putInt("dashRestore", r).apply()
+        return null
+    }
+
     /** Monthly summary notification on the 1st (default on). */
     fun monthlyEnabled(c: Context): Boolean = prefs(c).getBoolean("monthly", true)
 

@@ -218,6 +218,16 @@ class MainActivity : Activity() {
             setText(Config.switchText(this@MainActivity))
             setSingleLine()
         }
+        val blankBox = CheckBox(this).apply {
+            text = "Pet mode: blank the driver dashboard"
+            isChecked = Config.petBlankDash(this@MainActivity)
+        }
+        val dashInput = EditText(this).apply {
+            hint = "Dashboard brightness after pet mode (10-100)"
+            inputType = InputType.TYPE_CLASS_NUMBER
+            setText(Config.dashRestore(this@MainActivity).toString())
+            setSingleLine()
+        }
         val monthlyBox = CheckBox(this).apply {
             text = "Monthly summary notification on the 1st"
             isChecked = Config.monthlyEnabled(this@MainActivity)
@@ -240,6 +250,8 @@ class MainActivity : Activity() {
             addView(laterCheap)
             addView(laterWindow)
             addView(laterDate)
+            addView(blankBox)
+            addView(dashInput)
             addView(monthlyBox)
             addView(bgSpinner)
             addView(android.widget.Button(this@MainActivity).apply {
@@ -276,6 +288,8 @@ class MainActivity : Activity() {
                     MonthlyReport.schedule(this)
                     if (monthlyBox.isChecked) askNotificationPermission()
                     Config.setTariff(this, stdInput.text.toString(), cheapInput.text.toString(), windowInput.text.toString(), effInput.text.toString())
+                        ?.let { Toast.makeText(this, it, Toast.LENGTH_LONG).show() }
+                    Config.setPetDash(this, blankBox.isChecked, dashInput.text.toString())
                         ?.let { Toast.makeText(this, it, Toast.LENGTH_LONG).show() }
                     Config.setLaterTariff(this, laterStd.text.toString(), laterCheap.text.toString(), laterWindow.text.toString(), laterDate.text.toString())
                         ?.let { Toast.makeText(this, it, Toast.LENGTH_LONG).show() }
