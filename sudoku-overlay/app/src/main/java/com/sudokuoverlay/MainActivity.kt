@@ -2,6 +2,8 @@ package com.sudokuoverlay
 
 import android.Manifest
 import android.app.Activity
+import android.app.AlertDialog
+import android.content.pm.PackageManager
 import android.content.Intent
 import android.media.projection.MediaProjectionManager
 import android.net.Uri
@@ -34,7 +36,8 @@ class MainActivity : Activity() {
         col.addView(button("2b. Turn on Auto-fill (Accessibility > Installed apps > Sudoku Overlay)") {
             startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
         })
-        col.addView(button("3. Start overlay") { start() })
+        col.addView(button("3. Choose the game to open with the overlay") { chooseGame() })
+        col.addView(button("4. Start overlay (opens your game)") { start() })
         setContentView(col)
         if (Build.VERSION.SDK_INT >= 33) requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 1)
     }
@@ -45,7 +48,8 @@ class MainActivity : Activity() {
         val fill = AutoFillService.instance != null
         info.text = "Overlay permission: ${if (overlay) "OK" else "needed (step 1)"}\n" +
             "Auto-fill: ${if (fill) "ON, the Fill button will work" else "OFF. Do step 2a then 2b, until then Fill can't tap"}\n\n" +
-            "Then open your Sudoku app, and use the floating bar:\n" +
+            "Game to open: ${gameLabel()}\n\n" +
+            "Then use the floating bar in your Sudoku app, and use the floating bar:\n" +
             "• Solve: shows the missing digits in green\n" +
             "• Fill: types every answer for you\n" +
             "Keep pencil mode OFF in the game."
@@ -65,7 +69,36 @@ class MainActivity : Activity() {
         if (requestCode == 42 && resultCode == RESULT_OK && data != null) {
             startForegroundService(Intent(this, OverlayService::class.java)
                 .putExtra(OverlayService.EXTRA_CODE, resultCode).putExtra(OverlayService.EXTRA_DATA, data))
-            moveTaskToBack(true)
+            val game = gamePackage()?.let { packageManager.getLaunchIntentForPackage(it) }
+            if (game != null) startActivity(game) else moveTaskToBack(true)
         }
+    }
+
+    private val prefs get() = getSharedPreferences("settings", MODE_PRIVATE)
+
+    /** The chosen game, else Sudoku.com if it is installed. */
+    private fun gamePackage(): String? {
+        val saved = prefs.getString("game", null)
+        if (saved != null && packageManager.getLaunchIntentForPackage(saved) != null) return saved
+        val default = "com.easybrain.sudoku.android"
+        return default.takeIf { packageManager.getLaunchIntentForPackage(it) != null }
+    }
+
+    private fun gameLabel(): String {
+        val pkg = gamePackage() ?: return "none chosen (step 3)"
+        return try { packageManager.getApplicationLabel(packageManager.getApplicationInfo(pkg, 0)).toString() } catch (e: PackageManager.NameNotFoundException) { pkg }
+    }
+
+    private fun chooseGame() {
+        val launch = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
+        val apps = packageManager.queryIntentActivities(launch, 0)
+            .filter { it.activityInfo.packageName != packageName }
+            .map { it.loadLabel(packageManager).toString() to it.activityInfo.packageName }
+            .sortedBy { it.first.lowercase() }
+        AlertDialog.Builder(this).setTitle("Open which game?")
+            .setItems(apps.map { it.first }.toTypedArray()) { _, i ->
+                prefs.edit().putString("game", apps[i].second).apply()
+                onResume()
+            }.show()
     }
 }
