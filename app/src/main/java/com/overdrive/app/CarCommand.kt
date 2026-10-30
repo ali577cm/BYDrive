@@ -79,4 +79,14 @@ object CarCommand {
     /** Sets the driver dashboard (instrument cluster) brightness, 0-100, through Overdrive. */
     fun setClusterBrightness(ctx: Context, percent: Int): Outcome =
         post(ctx, "/api/vehicle/media", JSONObject().put("target", "cluster_brightness").put("value", percent.coerceIn(0, 100)))
+
+    /**
+     * Shows the picture currently set in Overdrive's Screen Deterrent on the car's main screen for its configured
+     * duration (the same as the "test" button there). Used by pet mode; best effort.
+     */
+    fun showScreenImage(ctx: Context): Outcome = post(ctx, "/api/surveillance/screen-deterrent/test", JSONObject())
+
+    /** Sets the car's main screen brightness (0-100) through Overdrive. */
+    fun setScreenBrightness(ctx: Context, percent: Int): Outcome =
+        post(ctx, "/api/vehicle/media", JSONObject().put("target", "brightness").put("value", percent.coerceIn(0, 100)))
 }

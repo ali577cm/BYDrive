@@ -20,7 +20,7 @@ object PetMode {
     const val MIN_SOC = 30                     // stop and warn at this battery level
     const val CLIMATE_MINUTES = 30             // longest remote climate run Overdrive allows
     const val RESEND_AFTER_MS = 15 * 60_000L   // ask for the AC again well before the run ends
-    const val STEP_MS = 30_000L                // how often the car is checked
+    const val STEP_MS = 5_000L                 // the picture is re-shown every step; the car is checked every 6th (30 s)
     const val MAINTAIN_MS = 6 * 60_000L        // how often the AC, CPD and on-screen message are refreshed
     const val NAME = "Henry"
 
@@ -92,8 +92,11 @@ class PetService : Service() {
             .newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "bydrive:pet").apply { acquire(12 * 3600_000L) }
         thread {
             try {
+                var n = 0
                 while (PetMode.isActive(this)) {
-                    tick()
+                    // Overdrive shows the picture for a limited time per request, so ask again every few seconds to keep it up
+                    CarCommand.showScreenImage(this)
+                    if (n++ % 6 == 0) tick()
                     try { Thread.sleep(PetMode.STEP_MS) } catch (_: InterruptedException) { break }
                 }
             } finally {
@@ -176,6 +179,12 @@ class PetService : Service() {
                 finish("Pet mode stopped - battery ${s.soc.toInt()}%", stopAc = true, warn = true); return
             }
 
+            // the dashboard lights up when the car wakes, so ask for it to be dark on every check and show how that went
+            if (Config.petBlankDash(this)) {
+                val d = CarCommand.setClusterBrightness(this, 0)
+                PetMode.edit(this).putBoolean("dashBlanked", d.ok || p.getBoolean("dashBlanked", false))
+                    .putString("dash", if (d.ok) "dash dark" else "dash: ${d.message}").apply()
+            }
             val now = System.currentTimeMillis()
             if (now - p.getLong("lastMaintain", 0L) >= PetMode.MAINTAIN_MS) {
                 PetMode.edit(this).putLong("lastMaintain", now).apply()
@@ -195,11 +204,10 @@ class PetService : Service() {
                         if (s.acOn != true) alert("Pet mode: AC did not start", "The car refused the climate command (${r.message}). Check on your pet.")
                     }
                 }
-                if (Config.petBlankDash(this)) {
-                    val b = CarCommand.setClusterBrightness(this, 0)
-                    PetMode.edit(this).putBoolean("dashBlanked", b.ok || p.getBoolean("dashBlanked", false)).apply()
-                }
-                CarCommand.showMessage(this, "${PetMode.NAME} is OK", "Dog mode is on. The car is kept at ${PetMode.TEMP_C.toInt()}°. Back soon.", 330)
+                // raise the main screen brightness once the picture is up (waking the panel can reset it)
+                Thread.sleep(2500)
+                val b = CarCommand.setScreenBrightness(this, 100)
+                PetMode.edit(this).putString("screen", if (b.ok) "screen bright" else "screen: ${b.message}").apply()
             }
             update()
         } catch (e: Exception) {
@@ -214,7 +222,7 @@ class PetService : Service() {
     private fun update() {
         val c = PetMode.cabin(this)
         val at = java.text.DateFormat.getTimeInstance(java.text.DateFormat.SHORT).format(java.util.Date())
-        goForeground((if (c != null) "cabin $c" else "no cabin reading") + " · " + PetMode.note(this) + " · checked $at")
+        goForeground((if (c != null) "cabin $c" else "no cabin reading") + " · " + PetMode.note(this) + (PetMode.p(this).getString("dash", null)?.let { " · $it" } ?: "") + " · checked $at")
         SealDrivePetWidget.redraw(this)
     }
 
