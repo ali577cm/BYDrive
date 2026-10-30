@@ -86,4 +86,26 @@ class CoreTest {
         val loose = sample.copyOf(); for (i in 0 until 30) loose[i] = 0
         assertEquals(2, SudokuSolver.countSolutions(loose))
     }
+
+    @Test fun printDistances() {
+        val (lum, w, h) = loadLum()
+        val grid = GridFinder.find(lum, w, h)!!
+        val idx = (0 until 81).filter { sample[it] != 0 }
+        val norms = idx.map { DigitGuess.norm(CellExtractor.extract(lum, w, h, grid, it / 9, it % 9)!!) }
+        var maxSame = 0.0; var minDiff = Double.MAX_VALUE
+        for (i in idx.indices) for (j in i + 1 until idx.size) {
+            val d = DigitGuess.distance(norms[i], norms[j])
+            if (sample[idx[i]] == sample[idx[j]]) maxSame = maxOf(maxSame, d) else minDiff = minOf(minDiff, d)
+        }
+        println("DIST maxSame=$maxSame minDiff=$minDiff")
+    }
+
+    @Test fun lookAlikeGlyphsFormOneGroupPerDigit() {
+        val (lum, w, h) = loadLum()
+        val grid = GridFinder.find(lum, w, h)!!
+        val idx = (0 until 81).filter { sample[it] != 0 }
+        val g = DigitGuess.cluster(idx.map { CellExtractor.extract(lum, w, h, grid, it / 9, it % 9)!! }, 300.0)
+        assertEquals(9, g.toSet().size)
+        for (a in idx.indices) for (b in idx.indices) assertEquals(sample[idx[a]] == sample[idx[b]], g[a] == g[b])
+    }
 }

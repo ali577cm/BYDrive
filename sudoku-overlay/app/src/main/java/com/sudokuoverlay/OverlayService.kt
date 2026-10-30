@@ -205,8 +205,11 @@ class OverlayService : Service() {
         bar?.let { wm.removeView(it); wm.addView(it, barParams) }
     }
 
-    private fun solve(thenFill: Boolean) {
+    private var fillPass = 0
+
+    private fun solve(thenFill: Boolean, pass: Int = 0) {
         if (busy) return
+        fillPass = pass
         val g = grabber ?: return
         if (thenFill && AutoFillService.instance == null) {
             say("Turn on \"Sudoku Overlay\" in Accessibility settings to use Fill", true)
@@ -255,14 +258,18 @@ class OverlayService : Service() {
         for (i in 0 until 81) if (s.givens[i] == 0) {
             steps.add(AutoFillService.Step(PointF(s.grid.centerX(i % 9).toFloat(), s.grid.centerY(i / 9).toFloat()), pad[s.solved[i] - 1]))
         }
-        if (steps.isEmpty()) return say("Nothing left to fill")
+        if (steps.isEmpty()) return say(if (fillPass > 0) "Done: board complete" else "Nothing left to fill")
         steps.shuffle() // random order, not top-left to bottom-right
         busy = true
         bar?.visibility = View.INVISIBLE
         svc.fill(steps) { ok ->
             busy = false
             bar?.visibility = View.VISIBLE
-            say(if (ok) "Done: filled ${steps.size} cells" else "Fill stopped")
+            if (ok && fillPass < 2) {
+                // Look again: any cell a tap missed is still empty, so read the board afresh and fill what's left.
+                say("Checking…", true)
+                main.postDelayed({ solve(true, fillPass + 1) }, 700)
+            } else say(if (ok) "Done: filled ${steps.size} cells" else "Fill stopped")
         }
     }
 

@@ -42,34 +42,54 @@ class BoardReader {
         val present = crops.count { it != null }
         if (present < 10) return Result(grid, null, null, "Only $present digits found. Is the board hidden or blank?")
 
-        val board = IntArray(81)
         val s = BoardCanvas
+        // 1. OCR the whole board once: a (possibly imperfect) label per cell.
+        val label = IntArray(81)
         for (c in recognize(s.build(crops))) {
             val col = (c.x / s.SLOT_W).toInt()
             val row = (c.y / s.SLOT_H).toInt()
             if (col !in 0..8 || row !in 0..8) continue
             val i = row * 9 + col
             val d = DigitMap.digitOf(c.ch)
-            if (d > 0 && crops[i] != null && board[i] == 0) board[i] = d
+            if (d > 0 && crops[i] != null && label[i] == 0) label[i] = d
         }
-        val known = ArrayList<Pair<Int, Gray>>()
-        for (i in 0 until 81) if (board[i] != 0) known.add(board[i] to crops[i]!!)
-        for (i in 0 until 81) {
-            if (crops[i] == null || board[i] != 0) continue
-            val d = recognize(s.single(crops[i]!!)).firstNotNullOfOrNull { DigitMap.digitOf(it.ch).takeIf { v -> v > 0 } }
-                ?: DigitGuess.guess(crops[i]!!, known)
-                ?: return Result(grid, null, null, "Couldn't read the digit at row ${i / 9 + 1}, column ${i % 9 + 1}")
-            board[i] = d
+        // 2. In one game every copy of a digit renders (almost) identically, so group look-alike glyphs and let
+        //    each group vote. One misread or unread cell is outvoted by its identical neighbours.
+        val cells = (0 until 81).filter { crops[it] != null }
+        val group = DigitGuess.cluster(cells.map { crops[it]!! }, 300.0)
+        val board = IntArray(81)
+        for (root in group.toSet()) {
+            val members = cells.filterIndexed { k, _ -> group[k] == root }
+            val votes = IntArray(10)
+            for (i in members) votes[label[i]]++
+            votes[0] = 0
+            var digit = (1..9).maxByOrNull { votes[it] }!!.takeIf { votes[it] > 0 }
+            if (digit == null) { // nobody was read: try each member alone, then the "thin glyph is a 1" rule
+                for (i in members) {
+                    digit = recognize(s.single(crops[i]!!)).firstNotNullOfOrNull { DigitMap.digitOf(it.ch).takeIf { v -> v > 0 } }
+                    if (digit != null) break
+                }
+                if (digit == null) {
+                    val g = crops[members[0]]!!
+                    if (g.w.toDouble() / g.h < 0.5) digit = 1
+                }
+            }
+            if (digit == null) {
+                val i = members[0]
+                return Result(grid, null, null, "Couldn't read the digit at row ${i / 9 + 1}, column ${i % 9 + 1}")
+            }
+            for (i in members) board[i] = digit
         }
-        // Second opinion on every digit: compare its shape with all the other digits read on this board.
-        // Where the two disagree, read that cell again on its own and take the answer that gets a second vote.
-        val all = (0 until 81).filter { board[it] != 0 }
-        for (i in all) {
-            val g = crops[i] ?: continue
-            val guess = DigitGuess.guess(g, all.filter { it != i }.map { board[it] to crops[it]!! }) ?: continue
-            if (guess == board[i]) continue
-            val again = recognize(s.single(g)).firstNotNullOfOrNull { DigitMap.digitOf(it.ch).takeIf { v -> v > 0 } }
-            board[i] = when (again) { guess -> guess; board[i] -> board[i]; else -> guess }
+        // A digit can't look like two different things: if two groups got the same digit while exactly one digit
+        // is unused (all nine are normally on the board), the smaller group is the one that was misread.
+        val byDigit = HashMap<Int, MutableSet<Int>>() // digit -> group roots
+        cells.forEachIndexed { k, i -> byDigit.getOrPut(board[i]) { HashSet() }.add(group[k]) }
+        val unused = (1..9).filter { it !in byDigit }
+        val dupes = byDigit.filter { it.value.size == 2 }
+        if (unused.size == 1 && dupes.size == 1 && byDigit.values.sumOf { it.size } == 9) {
+            val roots = dupes.values.first().toList()
+            val weaker = roots.minByOrNull { r -> group.count { it == r } }!!
+            cells.forEachIndexed { k, i -> if (group[k] == weaker) board[i] = unused[0] }
         }
         return Result(grid, board, findPad(lum, w, h, grid), null)
     }

@@ -158,7 +158,7 @@ object BoardCanvas {
 object DigitGuess {
     private const val W = 48
 
-    private fun norm(g: Gray): IntArray {
+    fun norm(g: Gray): IntArray {
         val s = BoardCanvas.scaleToHeight(g, BoardCanvas.DIGIT_H)
         val out = IntArray(W * BoardCanvas.DIGIT_H) { 255 }
         val ox = (W - minOf(W, s.w)) / 2
@@ -180,5 +180,25 @@ object DigitGuess {
             if (sum < best) { best = sum; digit = d }
         }
         return digit
+    }
+
+    /** Mean squared difference between two glyphs after scaling both to the same size. */
+    fun distance(a: IntArray, b: IntArray): Double {
+        var sum = 0L
+        for (i in a.indices) { val d = a[i] - b[i]; sum += d * d }
+        return sum.toDouble() / a.size
+    }
+
+    /**
+     * Groups glyphs that look the same (same digit, same font, same size render almost identically).
+     * Returns a group id per glyph.
+     */
+    fun cluster(glyphs: List<Gray>, threshold: Double): IntArray {
+        val n = glyphs.size
+        val norms = glyphs.map { norm(it) }
+        val parent = IntArray(n) { it }
+        fun find(x: Int): Int { var r = x; while (parent[r] != r) r = parent[r]; parent[x] = r; return r }
+        for (i in 0 until n) for (j in i + 1 until n) if (distance(norms[i], norms[j]) < threshold) parent[find(i)] = find(j)
+        return IntArray(n) { find(it) }
     }
 }
