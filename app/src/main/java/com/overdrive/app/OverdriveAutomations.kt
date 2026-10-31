@@ -12,6 +12,7 @@ import java.net.URL
  *  - whenever Speed Limit Warning turns on, turn it off again
  *  - if a window or the sunroof opens while the car is locked, close them and send a notification
  *  - if the cabin goes over 26 C while the car is locked, send a notification
+ *  - when the car is unlocked, publish an MQTT message (Home Assistant pet mode uses it to stop)
  *  - at 11pm, if the car is not plugged in, send a notification
  *  - at 11:15pm, if the car is not charging, send a notification
  * Uses the login the app already holds, only talks to the configured address, and only does this when you tap the button.
@@ -61,6 +62,12 @@ object OverdriveAutomations {
             listOf(trigger("temperature")),
             listOf(locked, cond("temperature", "gt", 26)),
             listOf(action("notification", "message" to "The cabin is over 26C while the car is locked. Check on your pet.")),
+        ),
+        Rule(
+            "BYDrive: tell Home Assistant the car was unlocked",
+            listOf(trigger("lock")),
+            listOf(cond("lock", "eq", "unlocked")),
+            listOf(action("mqttPublish", "topic" to "bydrive/pet/unlocked", "payload" to "1", "retain" to "false")),
         ),
         Rule(
             "BYDrive: not plugged in at 11pm",
