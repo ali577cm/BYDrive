@@ -160,6 +160,7 @@ class MainActivity : Activity() {
         col.addView(card("Behaviour",
             switchRow("Fill when a puzzle opens", "Starts by itself a moment after the game shows a board", "autorun"),
             switchRow("Stop if I touch the screen", "Fill cancels when it sees your finger", "stopOnTouch"),
+            switchRow("Offer to report failures", "Shows a notification you can tap to send me the log", "reportFailures"),
             gap(6), label("Fill speed", 13f, SUB), gap(6), speedSelector(),
             label("If taps go wrong, pick a slower one.", 12f, SUB).apply { setPadding(0, dp(6), 0, 0) }))
 
@@ -173,7 +174,10 @@ class MainActivity : Activity() {
             label("Open your game: the bar appears.\nSolve shows the missing digits in green.\nFill types every answer.\nKeep pencil mode off in the game.", 13f, SUB)))
 
         col.addView(card("Troubleshooting",
-            label("If something goes wrong, copy the log and paste it to me.", 12f, SUB), gap(10),
+            label("When something fails you get a notification: tap it, then Submit. Or report by hand:", 12f, SUB), gap(10),
+            pill("Report a problem", true) {
+                startActivity(Intent(Intent.ACTION_VIEW, Reporter.issueUri(this, "Manual report")))
+            }, gap(8),
             pill("Copy log text", false) { copyLog() }, gap(8),
             pill("Save screenshots to Photos", false) { saveShots() }, gap(8),
             pill("Share log files", false) { shareLog() }, gap(8),

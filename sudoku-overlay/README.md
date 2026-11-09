@@ -20,5 +20,11 @@ may ask for one tap to confirm. The workflow uses the same `KEYSTORE_B64` / `KEY
 A build made without that key (for example a local `assembleDebug`) is debug-signed and cannot be updated over a release-signed
 install: uninstall it once and install `SudokuOverlay.apk` from the first Release.
 
+## Problem reports
+When a Solve or Fill fails (not when you cancel by touching the screen) a quiet notification appears; tapping it opens a
+new-issue page on this repository with the failure, build, device and the tail of the log already filled in. No token or
+password is stored in the app: you press Submit. Switch it off with "Offer to report failures". The same page opens from
+**Report a problem** on the setup screen.
+
 ## Debug log
 The app keeps a log and its two latest screenshots; **Copy log text** / **Save screenshots to Photos** on the setup screen.

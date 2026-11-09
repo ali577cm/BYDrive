@@ -327,6 +327,7 @@ class OverlayService : Service() {
 
     private fun finish(msg: String) {
         DebugLog.i("finish: $msg")
+        if (!silentTry) maybeReport(msg)
         main.post {
             busy = false; showBar()
             if (silentTry) { silentTry = false; status?.visibility = View.GONE; scheduleAutoTry() } else say(msg)
@@ -335,7 +336,7 @@ class OverlayService : Service() {
 
     private fun startFill(s: Solution, only: List<Int>? = null, pass: Int = 0) {
         val svc = AutoFillService.instance ?: return say("Accessibility service is off")
-        val pad = s.pad ?: return say("Couldn't find the 1-9 buttons. Use Solve and type the green digits")
+        val pad = s.pad ?: return run { say("Couldn't find the 1-9 buttons. Use Solve and type the green digits"); maybeReport("Couldn't find the 1-9 buttons") }
         val steps = ArrayList<AutoFillService.Step>()
         for (d in 1..9) for (i in (only ?: (0 until 81).filter { s.needsDigit(it) })) if (s.solved[i] == d) { // all 1s, then all 2s, ...
             steps.add(AutoFillService.Step(PointF(s.grid.centerX(i % 9).toFloat(), s.grid.centerY(i / 9).toFloat()), pad[d - 1]))
@@ -376,8 +377,18 @@ class OverlayService : Service() {
         }
     }
 
+    /** Offers a one-tap report for real failures (not for you cancelling, or a screen with no board). */
+    private fun maybeReport(msg: String) {
+        if (!prefs.getBoolean("reportFailures", true)) return
+        val skip = msg.contains("you touched") || msg.startsWith("Only ")
+        val bad = msg.startsWith("Stopped") || msg.contains("may still be wrong") || msg.contains("double-check") ||
+            msg.startsWith("Couldn't") || msg.startsWith("Can't see") || msg.startsWith("No solution") || msg.contains("Screen capture")
+        if (bad && !skip) Reporter.notify(this, msg)
+    }
+
     private fun endFill(msg: String) {
         DebugLog.i("end: $msg")
+        maybeReport(msg)
         busy = false
         showBar()
         solution = null
