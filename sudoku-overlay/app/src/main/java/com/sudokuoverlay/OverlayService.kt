@@ -156,13 +156,20 @@ class OverlayService : Service() {
             text = t; setTextColor(Color.WHITE); textSize = 15f
             setPadding(dp(14), dp(10), dp(14), dp(10))
         }
-        val handle = chip("⠿")
+        val handle = chip("⠿").apply { setTextColor(0xFF8B93A1.toInt()) }
         val solve = chip("Solve").also { solveBtn = it }
-        val fill = chip("Fill")
-        val close = chip("✕")
+        // Fill is the main action: a green pill
+        val fill = chip("Fill").apply {
+            setTextColor(0xFF00170A.toInt()); typeface = android.graphics.Typeface.DEFAULT_BOLD
+            background = GradientDrawable().apply { setColor(0xFF00E676.toInt()); cornerRadius = dp(18).toFloat() }
+        }
+        val close = chip("✕").apply { setTextColor(0xFF8B93A1.toInt()) }
         val row = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            addView(handle); addView(solve); addView(fill); addView(close)
+            orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
+            setPadding(dp(4), dp(4), dp(4), dp(4))
+            addView(handle); addView(solve)
+            addView(fill, LinearLayout.LayoutParams(-2, -2).apply { setMargins(dp(4), 0, dp(4), 0) })
+            addView(close)
         }
         val st = TextView(this).apply {
             setTextColor(Color.WHITE); textSize = 12f; visibility = View.GONE
@@ -170,7 +177,7 @@ class OverlayService : Service() {
         }.also { status = it }
         val b = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            background = GradientDrawable().apply { setColor(0xEB202124.toInt()); cornerRadius = dp(22).toFloat() }
+            background = GradientDrawable().apply { setColor(0xF2171A21.toInt()); cornerRadius = dp(26).toFloat(); setStroke(dp(1), 0x33FFFFFF) }
             addView(row); addView(st)
         }
         val lp = overlayParams(true, WindowManager.LayoutParams.WRAP_CONTENT, WindowManager.LayoutParams.WRAP_CONTENT)

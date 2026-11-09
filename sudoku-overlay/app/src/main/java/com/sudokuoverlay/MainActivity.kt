@@ -10,84 +10,181 @@ import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
-import android.widget.Button
+import android.content.res.ColorStateList
+import android.graphics.Typeface
+import android.graphics.drawable.GradientDrawable
+import android.view.Gravity
+import android.view.View
 import android.widget.LinearLayout
+import android.widget.ScrollView
+import android.widget.Switch
 import android.widget.TextView
 
 class MainActivity : Activity() {
-    private lateinit var info: TextView
-    private lateinit var updateInfo: TextView
+    private val BG = 0xFF0E1014.toInt()
+    private val CARD = 0xFF171A21.toInt()
+    private val CARD2 = 0xFF222733.toInt()
+    private val TEXT = 0xFFF2F4F8.toInt()
+    private val SUB = 0xFF8B93A1.toInt()
+    private val ACCENT = 0xFF00E676.toInt()
+    private val BAD = 0xFFFF6B6B.toInt()
+
+    private var updateText = ""
+    private var updateView: TextView? = null
+    private var scroll: ScrollView? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         DebugLog.init(this)
-        val pad = (20 * resources.displayMetrics.density).toInt()
-        val col = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(pad, pad, pad, pad) }
-        info = TextView(this).apply { textSize = 15f }
-        fun button(t: String, onClick: () -> Unit) = Button(this).apply { text = t; setOnClickListener { onClick() } }
-        col.addView(TextView(this).apply {
-            text = "Sudoku Overlay"; textSize = 24f
-        })
-        col.addView(info)
-        col.addView(button("1. Allow drawing over other apps") {
-            startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName")))
-        })
-        col.addView(button("2a. If 2b is greyed out: App info, tap the 3 dots, Allow restricted settings") {
-            startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:$packageName")))
-        })
-        col.addView(button("2b. Turn on Auto-fill (Accessibility > Installed apps > Sudoku Overlay)") {
-            startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
-        })
-        col.addView(button("3. Choose the game to open with the overlay") { chooseGame() })
-        col.addView(android.widget.CheckBox(this).apply {
-            text = "Fill automatically when the game opens a puzzle"
-            isChecked = prefs.getBoolean("autorun", true)
-            setOnCheckedChangeListener { _, on -> prefs.edit().putBoolean("autorun", on).apply() }
-        })
-        col.addView(android.widget.CheckBox(this).apply {
-            text = "Stop Fill if I touch the screen"
-            isChecked = prefs.getBoolean("stopOnTouch", true)
-            setOnCheckedChangeListener { _, on -> prefs.edit().putBoolean("stopOnTouch", on).apply() }
-        })
-        col.addView(TextView(this).apply { text = "Fill speed (if taps go wrong, pick a slower one):"; setPadding(0, 16, 0, 0) })
-        col.addView(android.widget.RadioGroup(this).apply {
-            orientation = android.widget.RadioGroup.HORIZONTAL
-            listOf("Fast", "Normal", "Safe").forEachIndexed { i, label ->
-                addView(android.widget.RadioButton(this@MainActivity).apply { text = label; id = 100 + i })
-            }
-            check(100 + prefs.getInt("speed", 1))
-            setOnCheckedChangeListener { _, id -> prefs.edit().putInt("speed", id - 100).apply() }
-        })
-        col.addView(button("4. Start overlay (opens your game)") { start() })
-        updateInfo = TextView(this).apply { textSize = 13f; setPadding(0, 16, 0, 0) }
-        col.addView(android.widget.CheckBox(this).apply {
-            text = "Update automatically when a new version is published"
-            isChecked = prefs.getBoolean("autoupdate", true)
-            setOnCheckedChangeListener { _, on -> prefs.edit().putBoolean("autoupdate", on).apply() }
-        })
-        col.addView(button("Check for updates now") { checkUpdates(force = true) })
-        col.addView(updateInfo)
-        col.addView(button("Copy log text (then paste it into the chat)") { copyLog() })
-        col.addView(button("Save screenshots to Photos (then attach them in the chat)") { saveShots() })
-        col.addView(button("Share log files (other apps)") { shareLog() })
-        col.addView(button("Clear log") { DebugLog.clear(); android.widget.Toast.makeText(this, "Log cleared", android.widget.Toast.LENGTH_SHORT).show() })
-        setContentView(col)
-        updateInfo.text = "Installed build ${Updater.installedCode(this)}"
+        window.statusBarColor = BG
+        window.navigationBarColor = BG
+        updateText = "Installed build ${Updater.installedCode(this)}"
+        render()
         if (prefs.getBoolean("autoupdate", true)) checkUpdates(force = false)
         if (Build.VERSION.SDK_INT >= 33) requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 1)
     }
 
     override fun onResume() {
         super.onResume()
-        val overlay = Settings.canDrawOverlays(this)
-        val fill = AutoFillService.instance != null
-        info.text = "Overlay permission: ${if (overlay) "OK" else "needed (step 1)"}\n" +
-            "Auto-fill: ${if (fill) "ON, the Fill button will work" else "OFF. Do step 2a then 2b, until then Fill can't tap"}\n\n" +
-            "Game to open: ${gameLabel()}\n\n" +
-            "Then use the floating bar in your Sudoku app:\n" +
-            "• Solve: shows the missing digits in green\n" +
-            "• Fill: types every answer for you\n" +
-            "Keep pencil mode OFF in the game."
+        render()
+    }
+
+    // ---- small view helpers ----
+    private fun dp(v: Int) = (v * resources.displayMetrics.density).toInt()
+    private fun shape(color: Int, r: Int) = GradientDrawable().apply { setColor(color); cornerRadius = dp(r).toFloat() }
+    private fun label(t: String, sp: Float, color: Int, bold: Boolean = false) = TextView(this).apply {
+        text = t; textSize = sp; setTextColor(color); if (bold) typeface = Typeface.DEFAULT_BOLD
+    }
+    private fun gap(h: Int) = View(this).apply { layoutParams = LinearLayout.LayoutParams(1, dp(h)) }
+
+    private fun card(title: String?, vararg views: View) = LinearLayout(this).apply {
+        orientation = LinearLayout.VERTICAL
+        background = shape(CARD, 20)
+        setPadding(dp(18), dp(16), dp(18), dp(16))
+        layoutParams = LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(12) }
+        if (title != null) { addView(label(title.uppercase(), 11f, SUB, true)); addView(gap(10)) }
+        views.forEach { addView(it) }
+    }
+
+    private fun pill(t: String, filled: Boolean, onClick: () -> Unit) = TextView(this).apply {
+        text = t; textSize = 14f; gravity = Gravity.CENTER; typeface = Typeface.DEFAULT_BOLD
+        setTextColor(if (filled) 0xFF00170A.toInt() else TEXT)
+        background = shape(if (filled) ACCENT else CARD2, 14)
+        setPadding(dp(16), dp(10), dp(16), dp(10))
+        setOnClickListener { onClick() }
+    }
+
+    /** A line like "● Draw over other apps — Allowed", with a button when it needs attention. */
+    private fun statusRow(title: String, sub: String, ok: Boolean, action: String, onAction: () -> Unit) = LinearLayout(this).apply {
+        orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
+        setPadding(0, dp(8), 0, dp(8))
+        addView(View(context).apply { background = shape(if (ok) ACCENT else BAD, 6); layoutParams = LinearLayout.LayoutParams(dp(10), dp(10)).apply { rightMargin = dp(12) } })
+        addView(LinearLayout(context).apply {
+            orientation = LinearLayout.VERTICAL
+            addView(label(title, 15f, TEXT, true)); addView(label(sub, 12f, SUB))
+            layoutParams = LinearLayout.LayoutParams(0, -2, 1f)
+        })
+        addView(pill(action, !ok, onAction))
+    }
+
+    private fun switchRow(title: String, sub: String, key: String) = LinearLayout(this).apply {
+        orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL
+        setPadding(0, dp(8), 0, dp(8))
+        addView(LinearLayout(context).apply {
+            orientation = LinearLayout.VERTICAL
+            addView(label(title, 15f, TEXT, true)); addView(label(sub, 12f, SUB))
+            layoutParams = LinearLayout.LayoutParams(0, -2, 1f)
+        })
+        addView(Switch(context).apply {
+            isChecked = prefs.getBoolean(key, true)
+            thumbTintList = ColorStateList(arrayOf(intArrayOf(android.R.attr.state_checked), intArrayOf()), intArrayOf(ACCENT, 0xFFB0B6C3.toInt()))
+            trackTintList = ColorStateList(arrayOf(intArrayOf(android.R.attr.state_checked), intArrayOf()), intArrayOf(0x6600E676, 0xFF3A4150.toInt()))
+            setOnCheckedChangeListener { _, on -> prefs.edit().putBoolean(key, on).apply() }
+        })
+    }
+
+    private fun speedSelector() = LinearLayout(this).apply {
+        orientation = LinearLayout.HORIZONTAL
+        background = shape(CARD2, 14)
+        setPadding(dp(4), dp(4), dp(4), dp(4))
+        val current = prefs.getInt("speed", 1)
+        listOf("Fast", "Normal", "Safe").forEachIndexed { i, name ->
+            addView(TextView(context).apply {
+                text = name; gravity = Gravity.CENTER; textSize = 14f; typeface = Typeface.DEFAULT_BOLD
+                setTextColor(if (i == current) 0xFF00170A.toInt() else SUB)
+                background = if (i == current) shape(ACCENT, 11) else null
+                setPadding(0, dp(10), 0, dp(10))
+                layoutParams = LinearLayout.LayoutParams(0, -2, 1f)
+                setOnClickListener { prefs.edit().putInt("speed", i).apply(); render() }
+            })
+        }
+    }
+
+    private fun render() {
+        val keep = scroll?.scrollY ?: 0
+        val overlayOk = Settings.canDrawOverlays(this)
+        val fillOk = AutoFillService.instance != null
+        val installOk = packageManager.canRequestPackageInstalls()
+        val col = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(16), dp(24), dp(16), dp(32)) }
+
+        col.addView(label("Sudoku Overlay", 30f, TEXT, true))
+        col.addView(label("Reads the board, solves it, and types the answers in.", 14f, SUB))
+        col.addView(gap(20))
+
+        col.addView(card("Setup",
+            statusRow("Draw over other apps", if (overlayOk) "Allowed" else "Needed to show the floating bar", overlayOk, "Allow") {
+                startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName")))
+            },
+            statusRow("Auto-fill", if (fillOk) "On: Fill can tap for you" else "Needed for Fill (Solve works without it)", fillOk, "Turn on") {
+                startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+            },
+            *(if (fillOk) arrayOf() else arrayOf<View>(
+                label("Greyed out or \"restricted\"? Open App info, tap the three dots, then Allow restricted settings.", 12f, SUB).apply {
+                    setPadding(dp(22), 0, 0, dp(6))
+                },
+                pill("Open App info", false) {
+                    startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:$packageName")))
+                }.apply { layoutParams = LinearLayout.LayoutParams(-2, -2).apply { leftMargin = dp(22); bottomMargin = dp(6) } }
+            )),
+            statusRow("Game", gameLabel(), gamePackage() != null, "Change") { chooseGame() },
+            statusRow("Install updates", if (installOk) "Allowed" else "Needed to update itself", installOk, "Allow") {
+                startActivity(Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:$packageName")))
+            }))
+
+        col.addView(pill("Start overlay and open the game", true) { start() }.apply {
+            textSize = 17f; setPadding(dp(16), dp(18), dp(16), dp(18))
+            background = shape(ACCENT, 18)
+            layoutParams = LinearLayout.LayoutParams(-1, -2).apply { bottomMargin = dp(12) }
+        })
+
+        col.addView(card("Behaviour",
+            switchRow("Fill when a puzzle opens", "Starts by itself a moment after the game shows a board", "autorun"),
+            switchRow("Stop if I touch the screen", "Fill cancels when it sees your finger", "stopOnTouch"),
+            gap(6), label("Fill speed", 13f, SUB), gap(6), speedSelector(),
+            label("If taps go wrong, pick a slower one.", 12f, SUB).apply { setPadding(0, dp(6), 0, 0) }))
+
+        updateView = label(updateText, 12f, SUB)
+        col.addView(card("Updates",
+            switchRow("Update automatically", "Checks GitHub when the app or overlay starts", "autoupdate"),
+            updateView!!, gap(10),
+            pill("Check now", false) { checkUpdates(force = true) }))
+
+        col.addView(card("Using it",
+            label("Open your game: the bar appears.\nSolve shows the missing digits in green.\nFill types every answer.\nKeep pencil mode off in the game.", 13f, SUB)))
+
+        col.addView(card("Troubleshooting",
+            label("If something goes wrong, copy the log and paste it to me.", 12f, SUB), gap(10),
+            pill("Copy log text", false) { copyLog() }, gap(8),
+            pill("Save screenshots to Photos", false) { saveShots() }, gap(8),
+            pill("Share log files", false) { shareLog() }, gap(8),
+            pill("Clear log", false) { DebugLog.clear(); android.widget.Toast.makeText(this, "Log cleared", android.widget.Toast.LENGTH_SHORT).show() }))
+
+        col.addView(label("Build ${Updater.installedCode(this)}", 11f, SUB).apply { gravity = Gravity.CENTER; setPadding(0, dp(8), 0, 0) })
+
+        val sv = ScrollView(this).apply { setBackgroundColor(BG); isFillViewport = true; addView(col) }
+        scroll = sv
+        setContentView(sv)
+        sv.post { sv.scrollTo(0, keep) }
     }
 
     private fun start() {
@@ -120,12 +217,12 @@ class MainActivity : Activity() {
     }
 
     private fun gameLabel(): String {
-        val pkg = gamePackage() ?: return "none chosen (step 3)"
+        val pkg = gamePackage() ?: return "None chosen"
         return try { packageManager.getApplicationLabel(packageManager.getApplicationInfo(pkg, 0)).toString() } catch (e: PackageManager.NameNotFoundException) { pkg }
     }
 
     private fun checkUpdates(force: Boolean) {
-        Thread { Updater.run(this, force) { msg -> runOnUiThread { updateInfo.text = "Build ${Updater.installedCode(this)}: $msg" } } }.start()
+        Thread { Updater.run(this, force) { msg -> runOnUiThread { updateText = "Build ${Updater.installedCode(this)}: $msg"; updateView?.text = updateText } } }.start()
     }
 
     private fun copyLog() {
