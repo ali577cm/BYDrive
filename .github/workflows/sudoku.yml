@@ -1,0 +1,48 @@
+name: Build Sudoku Overlay APK
+on:
+  push:
+    branches: [main]
+    paths: ['sudoku-overlay/**', '.github/workflows/sudoku.yml']
+  workflow_dispatch:
+# Only the repository owner can trigger this (no pull_request trigger, so forks can never reach the secrets).
+permissions:
+  contents: write
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      # Third-party actions are pinned to exact commits, as in build.yml.
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683   # v4.2.2
+        with: { persist-credentials: false }
+      - uses: actions/setup-java@c5195efecf7bdfc987ee8bae7a71cb8b11521c00   # v4.7.1
+        with: { distribution: temurin, java-version: 17 }
+      - uses: gradle/actions/setup-gradle@748248ddd2a24f49513d8f472f81c3a07d4d50e1   # v4.4.4
+        with: { gradle-version: 8.7 }
+      - name: Unit tests
+        run: gradle -p sudoku-overlay :app:testDebugUnitTest
+      - name: Restore signing key
+        env:
+          KEYSTORE_B64: ${{ secrets.KEYSTORE_B64 }}
+        run: |
+          if [ -n "$KEYSTORE_B64" ]; then
+            umask 077
+            echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/release.jks"
+            echo "KEYSTORE_FILE=$RUNNER_TEMP/release.jks" >> "$GITHUB_ENV"
+          else
+            echo "::warning::KEYSTORE_B64 secret missing - signing with debug key; in-app updates will not install over other builds"
+          fi
+      - name: Build
+        env:
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+        run: gradle -p sudoku-overlay :app:assembleRelease -PappVersionCode=$((GITHUB_RUN_NUMBER + 1))
+      - name: Remove signing key from the runner
+        if: always()
+        run: rm -f "$RUNNER_TEMP/release.jks"
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cp sudoku-overlay/app/build/outputs/apk/release/app-release.apk SudokuOverlay.apk
+          CODE=$((GITHUB_RUN_NUMBER + 1))
+          # --latest=false: the repository's "latest" release must stay the BYDrive app's, whose updater follows it.
+          gh release create "sudoku-v$CODE" SudokuOverlay.apk --title "Sudoku Overlay $CODE" --notes "Sudoku Overlay build $CODE" --latest=false

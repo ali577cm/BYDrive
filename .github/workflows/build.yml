@@ -2,6 +2,8 @@ name: Build APK
 on:
   push:
     branches: [main]
+    # the Sudoku Overlay app has its own workflow (sudoku.yml) and its own releases
+    paths-ignore: ['sudoku-overlay/**', '.github/workflows/sudoku.yml']
   workflow_dispatch:
 # Only the repository owner can trigger this (no pull_request trigger, so forks can never reach the secrets).
 permissions:
