@@ -471,6 +471,7 @@ class StatsActivity : Activity() {
             c2.addView(text(money(predicted), 36f, accent, true))
             c2.addView(text("${money(s.costPence)} so far + %.1f days at ${money(perDay)}/day (based on ${if (useRecent) "your last 7 days" else "the month so far"})".format(remaining), 12f, dim).apply { setPadding(0, 0, 0, dp(8)) })
             line(c2, "Month so far, per day", money(monthPerDay) + " · " + mi(s.miles / elapsed))
+            if (s.kwhUsed > 0 && s.miles > 0) line(c2, "Efficiency this month", "%.2f mi/kWh".format(s.miles / s.kwhUsed))
             if (useRecent) line(c2, "Last 7 days, per day", money(r7!!.costPence / 7.0))
             content.addView(c2)
         }
@@ -485,7 +486,7 @@ class StatsActivity : Activity() {
             head.addView(text(label, 15f, Color.WHITE, true), LinearLayout.LayoutParams(0, -2, 1f))
             head.addView(text(if (s != null) money(s.costPence) else "…", 17f, accent, true))
             c.addView(head)
-            if (s != null) c.addView(text("${mi(s.miles)} · ${kwh(s.kwhUsed)} used · ${kwh(s.kwhCharged)} charged", 12f, dim).apply { setPadding(0, dp(2), 0, 0) })
+            if (s != null) c.addView(text("${mi(s.miles)} · ${kwh(s.kwhUsed)} used · ${kwh(s.kwhCharged)} charged" + (if (s.kwhUsed > 0 && s.miles > 0) " · %.2f mi/kWh".format(s.miles / s.kwhUsed) else ""), 12f, dim).apply { setPadding(0, dp(2), 0, 0) })
             content.addView(c)
         }
     }
