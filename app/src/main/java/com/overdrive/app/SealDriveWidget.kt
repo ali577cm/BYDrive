@@ -208,8 +208,7 @@ open class SealDriveWidget : AppWidgetProvider() {
         when (intent.action) {
             ACTION_REFRESH -> {
                 push(ctx, true)
-                // live mode: refreshes now, then every 30 s while the car is heating
-                try { ctx.startForegroundService(Intent(ctx, LiveRefreshService::class.java)) } catch (_: Exception) { refreshSoon(ctx) }
+                refreshSoon(ctx)
             }
             AppWidgetManager.ACTION_APPWIDGET_UPDATE, AppWidgetManager.ACTION_APPWIDGET_ENABLED -> {
                 // widget just added / redrawn: fetch if the data is more than 2 minutes old

@@ -62,14 +62,6 @@
             android:exported="false"
             android:permission="android.permission.BIND_JOB_SERVICE" />
         <service
-            android:name=".LiveRefreshService"
-            android:exported="false"
-            android:foregroundServiceType="specialUse">
-            <property
-                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
-                android:value="Refreshes the home-screen widget every 30 seconds while the car is heating, after the user taps refresh" />
-        </service>
-        <service
             android:name=".RefreshJobService"
             android:exported="false"
             android:permission="android.permission.BIND_JOB_SERVICE" />
