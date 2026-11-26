@@ -7,14 +7,9 @@ import java.net.HttpURLConnection
 import java.net.URL
 
 /**
- * Creates (or updates) a small set of rules in Overdrive's own Automations; they then run on the car, with no phone needed:
- *  - when the car locks, turn Child Presence Detection off
- *  - whenever Speed Limit Warning turns on, turn it off again
- *  - if a window or the sunroof opens while the car is locked, close them and send a notification
- *  - if the cabin goes over 26 C while the car is locked, send a notification
- *  - when the car is unlocked, publish an MQTT message (Home Assistant pet mode uses it to stop)
- *  - at 11pm, if the car is not plugged in, send a notification
- *  - at 11:15pm, if the car is not charging, send a notification
+ * Creates (or updates) a rule in Overdrive's own Automations; it then runs on the car, with no phone needed:
+ *  - at the chosen time, if it is colder than the chosen outside temperature, start the AC, defrost and heat the
+ *    steering wheel and driver's seat
  * Uses the login the app already holds, only talks to the configured address, and only does this when you tap the button.
  */
 object OverdriveAutomations {
@@ -32,54 +27,19 @@ object OverdriveAutomations {
     private fun action(type: String, vararg vars: Pair<String, Any>) =
         JSONObject().put("type", type).put("variables", JSONObject().also { o -> vars.forEach { o.put(it.first, it.second) } })
 
-    private val locked = cond("lock", "eq", "locked")
-
-    private val rules = listOf(
+    /** The rules BYDrive creates in Overdrive: a cold-morning warm-up at the time and temperatures set in Settings. */
+    private fun rules(ctx: Context): List<Rule> = listOf(
         Rule(
-            "BYDrive: CPD off when locked",
-            listOf(trigger("lock")),
-            listOf(locked),
-            listOf(action("cpd", "action" to "2")),                                   // 2 = off
-        ),
-        Rule(
-            "BYDrive: speed limit warning off whenever it turns on",
-            listOf(trigger("slw")),
-            listOf(cond("slw", "eq", "on")),
-            listOf(action("adas_slw", "payload" to "off")),
-        ),
-        Rule(
-            "BYDrive: close windows if opened while locked",
-            listOf("lf", "rf", "lr", "rr", "sunroof").map { trigger("windowState", "area" to it) },
-            listOf(locked),
+            "BYDrive: morning warm-up when cold",
+            listOf(trigger("time")),
+            listOf(cond("time", "eq", Config.warmTimeMin(ctx)), cond("outsideTemp", "lt", Config.warmBelowC(ctx))),
             listOf(
-                action("windowsAll", "command" to "2"),                               // 2 = close
-                action("sunroof", "payload" to "close"),
-                action("notification", "message" to "A window or the sunroof opened while the car was locked. BYDrive closed it."),
+                action("setAc", "action" to "on", "temp" to Config.warmTempC(ctx), "remoteDurationMinutes" to "30", "autoOffMinutes" to "30"),
+                action("frontDefrost", "action" to "on"),
+                action("rearDefrost", "action" to "on"),
+                action("steeringHeat", "action" to "on"),
+                action("seat", "type" to "heat", "area" to "driver", "payload" to "high"),
             ),
-        ),
-        Rule(
-            "BYDrive: cabin over 26C alert",
-            listOf(trigger("temperature")),
-            listOf(locked, cond("temperature", "gt", 26)),
-            listOf(action("notification", "message" to "The cabin is over 26C while the car is locked. Check on your pet.")),
-        ),
-        Rule(
-            "BYDrive: tell Home Assistant the car was unlocked",
-            listOf(trigger("lock")),
-            listOf(cond("lock", "eq", "unlocked")),
-            listOf(action("mqttPublish", "topic" to "bydrive/pet/unlocked", "payload" to "1", "retain" to "false")),
-        ),
-        Rule(
-            "BYDrive: not plugged in at 11pm",
-            listOf(trigger("time")),
-            listOf(cond("time", "eq", 23 * 60), cond("chargeGun", "eq", "disconnected")),
-            listOf(action("notification", "message" to "It is 11pm and the car is not plugged in.")),
-        ),
-        Rule(
-            "BYDrive: not charging at 11:15pm",
-            listOf(trigger("time")),
-            listOf(cond("time", "eq", 23 * 60 + 15), cond("chargingState", "eq", "off")),
-            listOf(action("notification", "message" to "It is 11:15pm and the car is not charging.")),
         ),
     )
 
@@ -129,7 +89,7 @@ object OverdriveAutomations {
             var created = 0
             var updated = 0
             val problems = ArrayList<String>()
-            for (r in rules) {
+            for (r in rules(ctx)) {
                 val id = ids[r.name]
                 val (code, text) = if (id.isNullOrEmpty()) call(base, cookie, "POST", "/api/automations/automation", body(r))
                                    else call(base, cookie, "PUT", "/api/automations/automation/" + java.net.URLEncoder.encode(id, "UTF-8"), body(r))

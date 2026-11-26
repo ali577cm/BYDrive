@@ -228,6 +228,23 @@ class MainActivity : Activity() {
             setText(Config.dashRestore(this@MainActivity).toString())
             setSingleLine()
         }
+        val warmTime = EditText(this).apply {
+            hint = "Morning warm-up start (HH:MM)"
+            setText(Config.warmTimeText(this@MainActivity))
+            setSingleLine()
+        }
+        val warmTemp = EditText(this).apply {
+            hint = "Warm-up cabin temperature (15-33)"
+            inputType = InputType.TYPE_CLASS_NUMBER
+            setText(Config.warmTempC(this@MainActivity).toString())
+            setSingleLine()
+        }
+        val warmBelow = EditText(this).apply {
+            hint = "Only if outside is colder than (C)"
+            inputType = InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_FLAG_SIGNED
+            setText(Config.warmBelowC(this@MainActivity).toString())
+            setSingleLine()
+        }
         val monthlyBox = CheckBox(this).apply {
             text = "Monthly summary notification on the 1st"
             isChecked = Config.monthlyEnabled(this@MainActivity)
@@ -252,14 +269,17 @@ class MainActivity : Activity() {
             addView(laterDate)
             addView(blankBox)
             addView(dashInput)
+            addView(warmTime)
+            addView(warmTemp)
+            addView(warmBelow)
             addView(monthlyBox)
             addView(bgSpinner)
             addView(android.widget.Button(this@MainActivity).apply {
                 text = "Create / update Overdrive automations…"
                 setOnClickListener {
                     AlertDialog.Builder(this@MainActivity)
-                        .setTitle("Create rules in Overdrive?")
-                        .setMessage("1) When the car locks: Child Presence Detection OFF.\n2) Whenever Speed Limit Warning turns on: turn it OFF.\n3) If a window or the sunroof opens while locked: close it and notify you.\n4) If the cabin goes over 26C while locked: notify you.\n5) At 11pm if the car is not plugged in: notify you.\n6) At 11:15pm if the car is not charging: notify you.\n7) When the car is unlocked: send an MQTT message to your broker (for Home Assistant pet mode).\n\nThey are created in Overdrive's Automations and run on the car. Tapping again updates them. You can delete them there at any time.")
+                        .setTitle("Create the warm-up rule in Overdrive?")
+                        .setMessage("At the warm-up time you set (save Settings first), if it is colder outside than your limit: AC on at your temperature for 30 minutes, front and rear defrost, heated steering wheel and driver's seat.\n\nIt is created in Overdrive's Automations and runs on the car. Tapping again updates it. You can delete it there at any time.")
                         .setPositiveButton("Create") { _, _ ->
                             Toast.makeText(this@MainActivity, "Creating…", Toast.LENGTH_SHORT).show()
                             thread {
@@ -290,6 +310,8 @@ class MainActivity : Activity() {
                     Config.setTariff(this, stdInput.text.toString(), cheapInput.text.toString(), windowInput.text.toString(), effInput.text.toString())
                         ?.let { Toast.makeText(this, it, Toast.LENGTH_LONG).show() }
                     Config.setPetDash(this, blankBox.isChecked, dashInput.text.toString())
+                        ?.let { Toast.makeText(this, it, Toast.LENGTH_LONG).show() }
+                    Config.setWarm(this, warmTime.text.toString(), warmTemp.text.toString(), warmBelow.text.toString())
                         ?.let { Toast.makeText(this, it, Toast.LENGTH_LONG).show() }
                     Config.setLaterTariff(this, laterStd.text.toString(), laterCheap.text.toString(), laterWindow.text.toString(), laterDate.text.toString())
                         ?.let { Toast.makeText(this, it, Toast.LENGTH_LONG).show() }

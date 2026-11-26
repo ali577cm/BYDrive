@@ -60,6 +60,23 @@ object Config {
         return null
     }
 
+    /** Morning warm-up rule: start time (minutes since midnight), cabin temperature, and "only if colder than" (outside, C). */
+    fun warmTimeMin(c: Context): Int = prefs(c).getInt("warmTime", 5 * 60 + 40)
+    fun warmTempC(c: Context): Int = prefs(c).getInt("warmTemp", 21)
+    fun warmBelowC(c: Context): Int = prefs(c).getInt("warmBelow", 6)
+    fun warmTimeText(c: Context): String = "%02d:%02d".format(warmTimeMin(c) / 60, warmTimeMin(c) % 60)
+    fun setWarm(c: Context, time: String, temp: String, below: String): String? {
+        val m = Regex("^(\\d{1,2}):(\\d{2})$").matchEntire(time.trim()) ?: return "Warm-up time not saved (use HH:MM, e.g. 05:40)"
+        val h = m.groupValues[1].toInt(); val mi = m.groupValues[2].toInt()
+        if (h > 23 || mi > 59) return "Warm-up time not saved (invalid time)"
+        val t = temp.trim().toIntOrNull()
+        if (t == null || t < 15 || t > 33) return "Warm-up temperature not saved (15 to 33)"
+        val b = below.trim().toIntOrNull()
+        if (b == null || b < -20 || b > 30) return "Warm-up 'colder than' not saved (-20 to 30)"
+        prefs(c).edit().putInt("warmTime", h * 60 + mi).putInt("warmTemp", t).putInt("warmBelow", b).apply()
+        return null
+    }
+
     /** Monthly summary notification on the 1st (default on). */
     fun monthlyEnabled(c: Context): Boolean = prefs(c).getBoolean("monthly", true)
 
