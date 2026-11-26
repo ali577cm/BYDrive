@@ -56,7 +56,10 @@ open class SealDriveWidget : AppWidgetProvider() {
             return RemoteViews(ctx.packageName, R.layout.widget_small).apply {
                 setTextViewText(R.id.widget_soc, if (soc >= 0) "$soc" else "--")
                 setTextColor(R.id.widget_soc, Color.parseColor(if (soc in 0..14) BAD else if (soc in 15..29) WARN else "#FFFFFF"))
-                setInt(R.id.widget_root, "setBackgroundResource", when (Config.bg(ctx)) {
+                val okAt0 = p.getLong("okAt", 0L)
+                val fresh = okAt0 > 0 && !p.contains("err") && System.currentTimeMillis() - okAt0 <= 30 * 60_000L
+                // red glow around the edge while the climate is heating (only from a fresh reading)
+                setInt(R.id.widget_root, "setBackgroundResource", if (p.getBoolean("heating", false) && fresh) R.drawable.widget_bg_heat else when (Config.bg(ctx)) {
                     0 -> R.drawable.widget_bg_clear
                     1 -> R.drawable.widget_bg_glass
                     else -> R.drawable.widget_bg
@@ -179,7 +182,7 @@ open class SealDriveWidget : AppWidgetProvider() {
                     val sub = if (s.charging && sessCost != null) "Session $sessCost · ${"%.1f".format(s.chargeSessionKwh)} kWh"
                         else "Updated ${time()}"
                     val stripCharge = if (s.charging) "⚡ " + (etaTight(s.chargeEtaMin) ?: "Charging") + (sessCost?.let { " · $it" } ?: "") else null
-                    prefs(ctx).edit().putLong("okAt", System.currentTimeMillis()).remove("err").apply()
+                    prefs(ctx).edit().putLong("okAt", System.currentTimeMillis()).remove("err").putBoolean("heating", s.acOn == true).apply()
                     // while the climate is running, show it (and the cabin temperature) in place of the range; charging still comes first
                     val acText = if (s.acOn == true) "AC " + (s.insideC?.let { "%.0f°".format(it) } ?: "on") else null
                     save(ctx, sub, s.soc?.toInt() ?: -1, rangeFull,
