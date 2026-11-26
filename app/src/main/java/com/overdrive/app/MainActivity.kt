@@ -245,6 +245,15 @@ class MainActivity : Activity() {
             setText(Config.warmBelowC(this@MainActivity).toString())
             setSingleLine()
         }
+        val pmTime = EditText(this).apply {
+            hint = "Afternoon warm-up start (HH:MM)"
+            setText(Config.pmTimeText(this@MainActivity))
+            setSingleLine()
+        }
+        val pmWeek = CheckBox(this).apply {
+            text = "Afternoon warm-up on weekdays only"
+            isChecked = Config.pmWeekdays(this@MainActivity)
+        }
         val monthlyBox = CheckBox(this).apply {
             text = "Monthly summary notification on the 1st"
             isChecked = Config.monthlyEnabled(this@MainActivity)
@@ -272,14 +281,16 @@ class MainActivity : Activity() {
             addView(warmTime)
             addView(warmTemp)
             addView(warmBelow)
+            addView(pmTime)
+            addView(pmWeek)
             addView(monthlyBox)
             addView(bgSpinner)
             addView(android.widget.Button(this@MainActivity).apply {
                 text = "Create / update Overdrive automations…"
                 setOnClickListener {
                     AlertDialog.Builder(this@MainActivity)
-                        .setTitle("Create the warm-up rule in Overdrive?")
-                        .setMessage("At the warm-up time you set (save Settings first), if it is colder outside than your limit: AC on at your temperature for 30 minutes, front and rear defrost, heated steering wheel and driver's seat.\n\nIt is created in Overdrive's Automations and runs on the car. Tapping again updates it. You can delete it there at any time.")
+                        .setTitle("Create the warm-up rules in Overdrive?")
+                        .setMessage("At the morning and afternoon warm-up times you set (save Settings first), if it is colder outside than your limit: AC on at your temperature for 30 minutes, front and rear defrost, heated steering wheel and driver's seat.\n\nIt is created in Overdrive's Automations and runs on the car. Tapping again updates it. You can delete it there at any time.")
                         .setPositiveButton("Create") { _, _ ->
                             Toast.makeText(this@MainActivity, "Creating…", Toast.LENGTH_SHORT).show()
                             thread {
@@ -312,6 +323,8 @@ class MainActivity : Activity() {
                     Config.setPetDash(this, blankBox.isChecked, dashInput.text.toString())
                         ?.let { Toast.makeText(this, it, Toast.LENGTH_LONG).show() }
                     Config.setWarm(this, warmTime.text.toString(), warmTemp.text.toString(), warmBelow.text.toString())
+                        ?.let { Toast.makeText(this, it, Toast.LENGTH_LONG).show() }
+                    Config.setPm(this, pmTime.text.toString(), pmWeek.isChecked)
                         ?.let { Toast.makeText(this, it, Toast.LENGTH_LONG).show() }
                     Config.setLaterTariff(this, laterStd.text.toString(), laterCheap.text.toString(), laterWindow.text.toString(), laterDate.text.toString())
                         ?.let { Toast.makeText(this, it, Toast.LENGTH_LONG).show() }

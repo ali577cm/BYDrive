@@ -8,8 +8,8 @@ import java.net.URL
 
 /**
  * Creates (or updates) a rule in Overdrive's own Automations; it then runs on the car, with no phone needed:
- *  - at the chosen time, if it is colder than the chosen outside temperature, start the AC, defrost and heat the
- *    steering wheel and driver's seat
+ *  - in the morning and the afternoon, if it is colder than the chosen outside temperature, start the AC, defrost and
+ *    heat the steering wheel and driver's seat
  * Uses the login the app already holds, only talks to the configured address, and only does this when you tap the button.
  */
 object OverdriveAutomations {
@@ -27,21 +27,32 @@ object OverdriveAutomations {
     private fun action(type: String, vararg vars: Pair<String, Any>) =
         JSONObject().put("type", type).put("variables", JSONObject().also { o -> vars.forEach { o.put(it.first, it.second) } })
 
-    /** The rules BYDrive creates in Overdrive: a cold-morning warm-up at the time and temperatures set in Settings. */
-    private fun rules(ctx: Context): List<Rule> = listOf(
-        Rule(
-            "BYDrive: morning warm-up when cold",
-            listOf(trigger("time")),
-            listOf(cond("time", "eq", Config.warmTimeMin(ctx)), cond("outsideTemp", "lt", Config.warmBelowC(ctx))),
-            listOf(
-                action("setAc", "action" to "on", "temp" to Config.warmTempC(ctx), "remoteDurationMinutes" to "30", "autoOffMinutes" to "30"),
-                action("frontDefrost", "action" to "on"),
-                action("rearDefrost", "action" to "on"),
-                action("steeringHeat", "action" to "on"),
-                action("seat", "type" to "heat", "area" to "driver", "payload" to "high"),
-            ),
-        ),
+    private fun warmActions(ctx: Context) = listOf(
+        action("setAc", "action" to "on", "temp" to Config.warmTempC(ctx), "remoteDurationMinutes" to "30", "autoOffMinutes" to "30"),
+        action("frontDefrost", "action" to "on"),
+        action("rearDefrost", "action" to "on"),
+        action("steeringHeat", "action" to "on"),
+        action("seat", "type" to "heat", "area" to "driver", "payload" to "high"),
     )
+
+    /** The rules BYDrive creates in Overdrive: a morning and an afternoon warm-up when it is cold outside. */
+    private fun rules(ctx: Context): List<Rule> {
+        val below = cond("outsideTemp", "lt", Config.warmBelowC(ctx))
+        val list = ArrayList<Rule>()
+        list.add(Rule("BYDrive: morning warm-up when cold", listOf(trigger("time")),
+            listOf(cond("time", "eq", Config.warmTimeMin(ctx)), below), warmActions(ctx)))
+        val pm = cond("time", "eq", Config.pmTimeMin(ctx))
+        if (Config.pmWeekdays(ctx)) {
+            // one rule per weekday (a rule's conditions all have to be true, so "Mon or Tue or ..." needs separate rules)
+            listOf("monday", "tuesday", "wednesday", "thursday", "friday").forEach { d ->
+                list.add(Rule("BYDrive: afternoon warm-up when cold (${d.take(3)})", listOf(trigger("time")),
+                    listOf(pm, below, cond("day", "eq", d)), warmActions(ctx)))
+            }
+        } else {
+            list.add(Rule("BYDrive: afternoon warm-up when cold", listOf(trigger("time")), listOf(pm, below), warmActions(ctx)))
+        }
+        return list
+    }
 
     private fun body(r: Rule): String = JSONObject()
         .put("name", r.name)

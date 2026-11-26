@@ -65,6 +65,18 @@ object Config {
     fun warmTempC(c: Context): Int = prefs(c).getInt("warmTemp", 23)
     fun warmBelowC(c: Context): Int = prefs(c).getInt("warmBelow", 6)
     fun warmTimeText(c: Context): String = "%02d:%02d".format(warmTimeMin(c) / 60, warmTimeMin(c) % 60)
+    /** Afternoon warm-up (same temperature and limit): start time, and whether it runs on weekdays only. */
+    fun pmTimeMin(c: Context): Int = prefs(c).getInt("pmTime", 15 * 60 + 30)
+    fun pmTimeText(c: Context): String = "%02d:%02d".format(pmTimeMin(c) / 60, pmTimeMin(c) % 60)
+    fun pmWeekdays(c: Context): Boolean = prefs(c).getBoolean("pmWeekdays", true)
+    fun setPm(c: Context, time: String, weekdays: Boolean): String? {
+        val m = Regex("^(\\d{1,2}):(\\d{2})$").matchEntire(time.trim()) ?: return "Afternoon warm-up time not saved (use HH:MM, e.g. 15:30)"
+        val h = m.groupValues[1].toInt(); val mi = m.groupValues[2].toInt()
+        if (h > 23 || mi > 59) return "Afternoon warm-up time not saved (invalid time)"
+        prefs(c).edit().putInt("pmTime", h * 60 + mi).putBoolean("pmWeekdays", weekdays).apply()
+        return null
+    }
+
     fun setWarm(c: Context, time: String, temp: String, below: String): String? {
         val m = Regex("^(\\d{1,2}):(\\d{2})$").matchEntire(time.trim()) ?: return "Warm-up time not saved (use HH:MM, e.g. 05:40)"
         val h = m.groupValues[1].toInt(); val mi = m.groupValues[2].toInt()
