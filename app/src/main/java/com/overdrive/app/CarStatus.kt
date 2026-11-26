@@ -27,6 +27,8 @@ object CarStatus {
         val sessionCostPence: Double? = null, // cost of the current charging session so far
         val todayKwh: Double? = null,         // energy used by all of today's trips (since local midnight)
         val lastChargeCostPence: Double? = null, // cost of the most recent completed charge, by low/high-rate minutes
+        val acOn: Boolean? = null,            // null = the car did not report it
+        val insideC: Double? = null,          // cabin temperature
     )
 
     sealed class Result {
@@ -261,7 +263,10 @@ object CarStatus {
         val sessionCost = if (charging && liveKwh != null)
             priceSession(costs?.liveStart ?: now, now, liveKwh, tariff) else null
 
+        val climate = j.optJSONObject("climate")
+        val acOn = climate?.let { if (it.has("acOn")) it.optBoolean("acOn") else null }
+        val insideC = climate?.optDouble("insideTempC", Double.NaN)?.takeIf { !it.isNaN() }
         return Result.Ok(Snapshot(soc, range, locked, doorsOpen, if (winKnown) winOpen else null, sentryOn, sentryRec,
-            charging, if (charging) eta else null, liveKwh, sessionCost, todayUsed, lastCharge))
+            charging, if (charging) eta else null, liveKwh, sessionCost, todayUsed, lastCharge, acOn, insideC))
     }
 }

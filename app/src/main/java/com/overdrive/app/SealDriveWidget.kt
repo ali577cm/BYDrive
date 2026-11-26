@@ -180,8 +180,10 @@ open class SealDriveWidget : AppWidgetProvider() {
                         else "Updated ${time()}"
                     val stripCharge = if (s.charging) "⚡ " + (etaTight(s.chargeEtaMin) ?: "Charging") + (sessCost?.let { " · $it" } ?: "") else null
                     prefs(ctx).edit().putLong("okAt", System.currentTimeMillis()).remove("err").apply()
+                    // while the climate is running, show it (and the cabin temperature) in place of the range; charging still comes first
+                    val acText = if (s.acOn == true) "AC " + (s.insideC?.let { "%.0f°".format(it) } ?: "on") else null
                     save(ctx, sub, s.soc?.toInt() ?: -1, rangeFull,
-                        s.locked == 2 && s.doorsOpen == 0, listOf(lock, win, sentry, avg), cap, capS, stripCharge ?: (miles ?: ""), stripEnergy)
+                        s.locked == 2 && s.doorsOpen == 0, listOf(lock, win, sentry, avg), cap, capS, stripCharge ?: acText ?: (miles ?: ""), stripEnergy)
                 }
             }
         }
