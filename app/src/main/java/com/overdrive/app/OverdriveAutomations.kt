@@ -8,7 +8,7 @@ import java.net.URL
 
 /**
  * Creates (or updates) a rule in Overdrive's own Automations; it then runs on the car, with no phone needed:
- *  - in the morning and the afternoon, if it is colder than the chosen outside temperature, start the AC, defrost and
+ *  - in the morning, at lunch and in the afternoon, if it is colder than the chosen outside temperature, start the AC, defrost and
  *    heat the steering wheel and driver's seat
  * Uses the login the app already holds, only talks to the configured address, and only does this when you tap the button.
  */
@@ -35,21 +35,23 @@ object OverdriveAutomations {
         action("seat", "type" to "heat", "area" to "driver", "payload" to "high"),
     )
 
-    /** The rules BYDrive creates in Overdrive: a morning and an afternoon warm-up when it is cold outside. */
+    /** The rules BYDrive creates in Overdrive: morning, lunch and afternoon warm-ups when it is cold outside. */
     private fun rules(ctx: Context): List<Rule> {
         val below = cond("outsideTemp", "lt", Config.warmBelowC(ctx))
         val list = ArrayList<Rule>()
         list.add(Rule("BYDrive: morning warm-up when cold", listOf(trigger("time")),
             listOf(cond("time", "eq", Config.warmTimeMin(ctx)), below), warmActions(ctx)))
-        val pm = cond("time", "eq", Config.pmTimeMin(ctx))
-        if (Config.pmWeekdays(ctx)) {
-            // one rule per weekday (a rule's conditions all have to be true, so "Mon or Tue or ..." needs separate rules)
-            listOf("monday", "tuesday", "wednesday", "thursday", "friday").forEach { d ->
-                list.add(Rule("BYDrive: afternoon warm-up when cold (${d.take(3)})", listOf(trigger("time")),
-                    listOf(pm, below, cond("day", "eq", d)), warmActions(ctx)))
+        // lunch and afternoon: on weekdays only, or every day (one rule per weekday, since a rule's conditions all have to be true)
+        for ((label, minutes) in listOf("lunch" to Config.lunchTimeMin(ctx), "afternoon" to Config.pmTimeMin(ctx))) {
+            val at = cond("time", "eq", minutes)
+            if (Config.pmWeekdays(ctx)) {
+                listOf("monday", "tuesday", "wednesday", "thursday", "friday").forEach { d ->
+                    list.add(Rule("BYDrive: $label warm-up when cold (${d.take(3)})", listOf(trigger("time")),
+                        listOf(at, below, cond("day", "eq", d)), warmActions(ctx)))
+                }
+            } else {
+                list.add(Rule("BYDrive: $label warm-up when cold", listOf(trigger("time")), listOf(at, below), warmActions(ctx)))
             }
-        } else {
-            list.add(Rule("BYDrive: afternoon warm-up when cold", listOf(trigger("time")), listOf(pm, below), warmActions(ctx)))
         }
         return list
     }
