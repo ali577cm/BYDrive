@@ -67,7 +67,7 @@ object Config {
     /** Morning warm-up rule: start time (minutes since midnight), cabin temperature, and "only if colder than" (outside, C). */
     fun warmTimeMin(c: Context): Int = prefs(c).getInt("warmTime", 6 * 60 + 30)
     fun warmTempC(c: Context): Int = prefs(c).getInt("warmTemp", 23)
-    fun warmBelowC(c: Context): Int = prefs(c).getInt("warmBelow", 6)
+    fun warmBelowC(c: Context): Int = prefs(c).getInt("warmBelow", 10)
     fun warmTimeText(c: Context): String = "%02d:%02d".format(warmTimeMin(c) / 60, warmTimeMin(c) % 60)
     /** Afternoon warm-up (same temperature and limit): start time, and whether it runs on weekdays only. */
     fun pmTimeMin(c: Context): Int = prefs(c).getInt("pmTime", 15 * 60 + 45)
