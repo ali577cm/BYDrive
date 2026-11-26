@@ -53,7 +53,7 @@ object OverdriveAutomations {
     /** Earlier versions made every-day rules under these names; they are removed so nothing runs at weekends. */
     private val obsolete = listOf("BYDrive: morning warm-up when cold", "BYDrive: lunch warm-up when cold", "BYDrive: afternoon warm-up when cold")
 
-    private fun body(r: Rule): String = JSONObject()
+    private fun body(r: Rule, disabled: Boolean): String = JSONObject()
         .put("name", r.name)
         .put("triggers", JSONArray(r.triggers))
         .put("conditions", JSONArray(r.conditions))
@@ -61,7 +61,7 @@ object OverdriveAutomations {
         .put("delay", 0)
         .put("actions", JSONArray(r.actions))
         .put("elseActions", JSONArray())
-        .put("disabled", false)
+        .put("disabled", disabled)
         .toString()
 
     private fun call(base: String, cookie: String, method: String, path: String, payload: String?): Pair<Int, String> {
@@ -81,6 +81,38 @@ object OverdriveAutomations {
         val text = (if (code in 200..299) c.inputStream else c.errorStream)?.bufferedReader()?.use { it.readText() } ?: ""
         c.disconnect()
         return code to text
+    }
+
+    /** Switches every BYDrive warm-up rule in Overdrive off (holiday) or on, without touching anything else. Blocking. */
+    fun applyHoliday(ctx: Context, on: Boolean): String {
+        val (base, cookie) = CarStatus.auth(ctx) ?: return "Set the address and sign in first"
+        return try {
+            val (lc, listText) = call(base, cookie, "GET", "/api/automations/picker", null)
+            if (lc == 401 || lc == 403 || lc in 300..399) return "Sign in via the app first"
+            if (lc != 200) return "Overdrive answered HTTP $lc"
+            var done = 0
+            var failed = 0
+            val arr = JSONArray(listText)
+            for (i in 0 until arr.length()) {
+                val o = arr.optJSONObject(i) ?: continue
+                val name = o.optString("name")
+                val id = o.optString("id")
+                if (!name.startsWith("BYDrive: ") || !name.contains("warm-up") || id.isEmpty()) continue
+                val (code, _) = call(base, cookie, "POST", "/api/automations/disable/" + java.net.URLEncoder.encode(id, "UTF-8"),
+                    JSONObject().put("disabled", on).toString())
+                if (code == 200) done++ else failed++
+            }
+            when {
+                done == 0 && failed == 0 -> "No warm-up rules found - tap Create / update first"
+                failed > 0 -> "$done changed, $failed failed"
+                on -> "Holiday mode on: $done warm-ups paused"
+                else -> "Holiday mode off: $done warm-ups running"
+            }
+        } catch (e: java.io.IOException) {
+            "Couldn't reach Overdrive (is Tailscale connected and the car awake?)"
+        } catch (e: org.json.JSONException) {
+            "Unexpected answer from Overdrive"
+        }
     }
 
     /** Returns a short message for the user. Blocking: call from a background thread. */
@@ -106,8 +138,8 @@ object OverdriveAutomations {
             val problems = ArrayList<String>()
             for (r in rules(ctx)) {
                 val id = ids[r.name]
-                val (code, text) = if (id.isNullOrEmpty()) call(base, cookie, "POST", "/api/automations/automation", body(r))
-                                   else call(base, cookie, "PUT", "/api/automations/automation/" + java.net.URLEncoder.encode(id, "UTF-8"), body(r))
+                val (code, text) = if (id.isNullOrEmpty()) call(base, cookie, "POST", "/api/automations/automation", body(r, Config.holiday(ctx)))
+                                   else call(base, cookie, "PUT", "/api/automations/automation/" + java.net.URLEncoder.encode(id, "UTF-8"), body(r, Config.holiday(ctx)))
                 if (code == 200) { if (id.isNullOrEmpty()) created++ else updated++ }
                 else problems.add("${r.name}: HTTP $code ${text.take(80)}")
             }

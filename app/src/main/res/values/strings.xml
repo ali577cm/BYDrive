@@ -5,4 +5,5 @@
     <string name="shortcut_monthly">Send monthly summary now</string>
     <string name="shortcut_stats">Usage &amp; costs</string>
     <string name="widget_pet_desc">Pet mode: tap to keep the car cool for your dog, tap again to stop</string>
+    <string name="widget_holiday_desc">Holiday: pause or resume the car warm-ups with one tap</string>
 </resources>

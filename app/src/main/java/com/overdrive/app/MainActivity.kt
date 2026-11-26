@@ -337,6 +337,7 @@ class MainActivity : Activity() {
                     web.loadUrl(saved)
                     if (SealDriveWidget.hasMainWidgets(this)) thread { SealDriveWidget.refreshNow(this) }
                     SealDrivePetWidget.redraw(this)
+                    SealDriveHolidayWidget.redraw(this)
                 }
             }
         if (url != null) d.setNegativeButton("Cancel", null)

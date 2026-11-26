@@ -60,6 +60,10 @@ object Config {
         return null
     }
 
+    /** Holiday mode: the warm-up rules in Overdrive are switched off while this is on. */
+    fun holiday(c: Context): Boolean = prefs(c).getBoolean("holiday", false)
+    fun setHoliday(c: Context, on: Boolean) { prefs(c).edit().putBoolean("holiday", on).apply() }
+
     /** Morning warm-up rule: start time (minutes since midnight), cabin temperature, and "only if colder than" (outside, C). */
     fun warmTimeMin(c: Context): Int = prefs(c).getInt("warmTime", 6 * 60 + 30)
     fun warmTempC(c: Context): Int = prefs(c).getInt("warmTemp", 23)

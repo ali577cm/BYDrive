@@ -58,6 +58,10 @@
                 android:value="Keeps the car cooled for a pet by re-sending the climate command until the user unlocks the car" />
         </service>
         <service
+            android:name=".HolidayJobService"
+            android:exported="false"
+            android:permission="android.permission.BIND_JOB_SERVICE" />
+        <service
             android:name=".RefreshJobService"
             android:exported="false"
             android:permission="android.permission.BIND_JOB_SERVICE" />
@@ -82,6 +86,17 @@
             <meta-data
                 android:name="android.appwidget.provider"
                 android:resource="@xml/sealdrive_pet_info" />
+        </receiver>
+        <receiver
+            android:name=".SealDriveHolidayWidget"
+            android:label="BYDrive holiday"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/sealdrive_holiday_info" />
         </receiver>
     </application>
 </manifest>
