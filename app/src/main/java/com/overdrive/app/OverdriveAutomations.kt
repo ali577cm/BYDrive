@@ -8,7 +8,7 @@ import java.net.URL
 
 /**
  * Creates (or updates) a rule in Overdrive's own Automations; it then runs on the car, with no phone needed:
- *  - in the morning, at lunch and in the afternoon, if it is colder than the chosen outside temperature, start the AC, defrost and
+ *  - on weekdays, in the morning, at lunch and in the afternoon, if it is colder than the chosen outside temperature, start the AC, defrost and
  *    heat the steering wheel and driver's seat
  * Uses the login the app already holds, only talks to the configured address, and only does this when you tap the button.
  */
@@ -35,26 +35,23 @@ object OverdriveAutomations {
         action("seat", "type" to "heat", "area" to "driver", "payload" to "high"),
     )
 
-    /** The rules BYDrive creates in Overdrive: morning, lunch and afternoon warm-ups when it is cold outside. */
+    /** The rules BYDrive creates in Overdrive: weekday morning, lunch and afternoon warm-ups when it is cold outside. */
     private fun rules(ctx: Context): List<Rule> {
         val below = cond("outsideTemp", "lt", Config.warmBelowC(ctx))
         val list = ArrayList<Rule>()
-        list.add(Rule("BYDrive: morning warm-up when cold", listOf(trigger("time")),
-            listOf(cond("time", "eq", Config.warmTimeMin(ctx)), below), warmActions(ctx)))
-        // lunch and afternoon: on weekdays only, or every day (one rule per weekday, since a rule's conditions all have to be true)
-        for ((label, minutes) in listOf("lunch" to Config.lunchTimeMin(ctx), "afternoon" to Config.pmTimeMin(ctx))) {
+        // weekdays only: one rule per weekday, since all of a rule's conditions have to be true
+        for ((label, minutes) in listOf("morning" to Config.warmTimeMin(ctx), "lunch" to Config.lunchTimeMin(ctx), "afternoon" to Config.pmTimeMin(ctx))) {
             val at = cond("time", "eq", minutes)
-            if (Config.pmWeekdays(ctx)) {
-                listOf("monday", "tuesday", "wednesday", "thursday", "friday").forEach { d ->
-                    list.add(Rule("BYDrive: $label warm-up when cold (${d.take(3)})", listOf(trigger("time")),
-                        listOf(at, below, cond("day", "eq", d)), warmActions(ctx)))
-                }
-            } else {
-                list.add(Rule("BYDrive: $label warm-up when cold", listOf(trigger("time")), listOf(at, below), warmActions(ctx)))
+            listOf("monday", "tuesday", "wednesday", "thursday", "friday").forEach { d ->
+                list.add(Rule("BYDrive: $label warm-up when cold (${d.take(3)})", listOf(trigger("time")),
+                    listOf(at, below, cond("day", "eq", d)), warmActions(ctx)))
             }
         }
         return list
     }
+
+    /** Earlier versions made every-day rules under these names; they are removed so nothing runs at weekends. */
+    private val obsolete = listOf("BYDrive: morning warm-up when cold", "BYDrive: lunch warm-up when cold", "BYDrive: afternoon warm-up when cold")
 
     private fun body(r: Rule): String = JSONObject()
         .put("name", r.name)
@@ -101,6 +98,11 @@ object OverdriveAutomations {
             } catch (_: Exception) {}
             var created = 0
             var updated = 0
+            var removed = 0
+            for (name in obsolete) {
+                val id = ids[name]
+                if (!id.isNullOrEmpty() && call(base, cookie, "DELETE", "/api/automations/automation/" + java.net.URLEncoder.encode(id, "UTF-8"), null).first == 200) removed++
+            }
             val problems = ArrayList<String>()
             for (r in rules(ctx)) {
                 val id = ids[r.name]
@@ -111,7 +113,7 @@ object OverdriveAutomations {
             }
             when {
                 problems.isNotEmpty() -> "Problem with: " + problems.joinToString("; ") + (if (created + updated > 0) " (others done)" else "")
-                else -> "Overdrive rules ready: $created created, $updated updated"
+                else -> "Overdrive rules ready: $created created, $updated updated" + (if (removed > 0) ", $removed old removed" else "")
             }
         } catch (e: java.io.IOException) {
             "Couldn't reach Overdrive (is Tailscale connected and the car awake?)"

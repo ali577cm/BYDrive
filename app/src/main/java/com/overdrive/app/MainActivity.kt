@@ -255,10 +255,6 @@ class MainActivity : Activity() {
             setText(Config.pmTimeText(this@MainActivity))
             setSingleLine()
         }
-        val pmWeek = CheckBox(this).apply {
-            text = "Lunch and afternoon warm-ups on weekdays only"
-            isChecked = Config.pmWeekdays(this@MainActivity)
-        }
         val monthlyBox = CheckBox(this).apply {
             text = "Monthly summary notification on the 1st"
             isChecked = Config.monthlyEnabled(this@MainActivity)
@@ -288,7 +284,6 @@ class MainActivity : Activity() {
             addView(warmBelow)
             addView(lunchTime)
             addView(pmTime)
-            addView(pmWeek)
             addView(monthlyBox)
             addView(bgSpinner)
             addView(android.widget.Button(this@MainActivity).apply {
@@ -296,7 +291,7 @@ class MainActivity : Activity() {
                 setOnClickListener {
                     AlertDialog.Builder(this@MainActivity)
                         .setTitle("Create the warm-up rules in Overdrive?")
-                        .setMessage("At the morning, lunch and afternoon warm-up times you set (save Settings first), if it is colder outside than your limit: AC on at your temperature for 30 minutes, front and rear defrost, heated steering wheel and driver's seat.\n\nIt is created in Overdrive's Automations and runs on the car. Tapping again updates it. You can delete it there at any time.")
+                        .setMessage("On weekdays, at the morning, lunch and afternoon warm-up times you set (save Settings first), if it is colder outside than your limit: AC on at your temperature for 30 minutes, front and rear defrost, heated steering wheel and driver's seat.\n\nIt is created in Overdrive's Automations and runs on the car. Tapping again updates it. You can delete it there at any time.")
                         .setPositiveButton("Create") { _, _ ->
                             Toast.makeText(this@MainActivity, "Creating…", Toast.LENGTH_SHORT).show()
                             thread {
@@ -332,7 +327,7 @@ class MainActivity : Activity() {
                         ?.let { Toast.makeText(this, it, Toast.LENGTH_LONG).show() }
                     Config.setLunch(this, lunchTime.text.toString())
                         ?.let { Toast.makeText(this, it, Toast.LENGTH_LONG).show() }
-                    Config.setPm(this, pmTime.text.toString(), pmWeek.isChecked)
+                    Config.setPm(this, pmTime.text.toString(), true)
                         ?.let { Toast.makeText(this, it, Toast.LENGTH_LONG).show() }
                     Config.setLaterTariff(this, laterStd.text.toString(), laterCheap.text.toString(), laterWindow.text.toString(), laterDate.text.toString())
                         ?.let { Toast.makeText(this, it, Toast.LENGTH_LONG).show() }
