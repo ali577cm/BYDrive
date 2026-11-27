@@ -28,6 +28,8 @@ object OverdriveAutomations {
         JSONObject().put("type", type).put("variables", JSONObject().also { o -> vars.forEach { o.put(it.first, it.second) } })
 
     private fun warmActions(ctx: Context) = listOf(
+        action("powerOn"),                                                          // wake the whole car first (local, no BYD cloud)
+        action("pause", "milliseconds" to 20000),                                  // give it time to come up
         action("setAc", "action" to "on", "temp" to Config.warmTempC(ctx), "remoteDurationMinutes" to "30", "autoOffMinutes" to "30"),
         action("frontDefrost", "action" to "on"),
         action("rearDefrost", "action" to "on"),
