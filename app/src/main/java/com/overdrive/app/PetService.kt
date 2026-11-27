@@ -21,7 +21,7 @@ object PetMode {
     const val CLIMATE_MINUTES = 30             // longest remote climate run Overdrive allows
     const val RESEND_AFTER_MS = 15 * 60_000L   // ask for the AC again well before the run ends
     const val STEP_MS = 5_000L                 // the picture is re-shown every step; the car is checked every 6th (30 s)
-    const val MAINTAIN_MS = 6 * 60_000L        // how often the AC, CPD and on-screen message are refreshed
+    const val MAINTAIN_MS = 6 * 60_000L        // how often the AC and on-screen picture are refreshed
     const val NAME = "Henry"
 
     private fun prefs(c: Context) = c.getSharedPreferences("pet", Context.MODE_PRIVATE)
@@ -38,9 +38,8 @@ object PetMode {
 
     private fun start(ctx: Context) {
         edit(ctx).putBoolean("active", true).putBoolean("sawLocked", false).putLong("lastSend", 0L)
-            .putInt("fails", 0).putLong("lastMaintain", 0L).putInt("cpdBefore", -1).putLong("lastTry", 0L).putBoolean("dashBlanked", false).putString("cabin", null).putString("note", "Starting…").apply()
+            .putInt("fails", 0).putLong("lastMaintain", 0L).putLong("lastTry", 0L).putBoolean("dashBlanked", false).putString("cabin", null).putString("note", "Starting…").apply()
         ctx.startForegroundService(Intent(ctx, PetService::class.java).setAction(PetService.ACTION_START))
-        SealDrivePetWidget.redraw(ctx)
     }
 
     /** User-requested stop: the AC is left running (it ends by itself within 30 minutes). */
@@ -141,7 +140,7 @@ class PetService : Service() {
             .build())
     }
 
-    /** One check: stop conditions every time; the AC, CPD and screen message only every few minutes. */
+    /** One check: stop conditions every time; the AC and screen picture only every few minutes. */
     private fun tick() {
         if (!busy.compareAndSet(false, true)) return
         try {
@@ -188,14 +187,6 @@ class PetService : Service() {
             val now = System.currentTimeMillis()
             if (now - p.getLong("lastMaintain", 0L) >= PetMode.MAINTAIN_MS) {
                 PetMode.edit(this).putLong("lastMaintain", now).apply()
-                // Child Presence Detection would raise the alarm with the pet inside - keep it off, remember what it was
-                if (s.cpdOn == true) {
-                    if (p.getInt("cpdBefore", -1) == -1) PetMode.edit(this).putInt("cpdBefore", 1).apply()
-                    CarCommand.setChildPresenceDetection(this, 2)
-                } else if (s.cpdOn == false && p.getInt("cpdBefore", -1) == -1) {
-                    PetMode.edit(this).putInt("cpdBefore", 0).apply()
-                }
-
                 if (s.acOn != true || now - p.getLong("lastSend", 0L) >= PetMode.RESEND_AFTER_MS) {
                     val r = CarCommand.startClimate(this, PetMode.TEMP_C, PetMode.CLIMATE_MINUTES)
                     if (r.ok) PetMode.edit(this).putLong("lastSend", now).putString("note", "AC on" + (if (r.path.isNotEmpty()) " (${r.path})" else "")).apply()
@@ -223,12 +214,10 @@ class PetService : Service() {
         val c = PetMode.cabin(this)
         val at = java.text.DateFormat.getTimeInstance(java.text.DateFormat.SHORT).format(java.util.Date())
         goForeground((if (c != null) "cabin $c" else "no cabin reading") + " · " + PetMode.note(this) + (PetMode.p(this).getString("dash", null)?.let { " · $it" } ?: "") + " · checked $at")
-        SealDrivePetWidget.redraw(this)
     }
 
     private fun finish(reason: String, stopAc: Boolean, warn: Boolean) {
         val p = PetMode.p(this)
-        val cpdBefore = p.getInt("cpdBefore", -1)
         PetMode.edit(this).putBoolean("active", false).putString("note", reason).apply()
         lock?.let { if (it.isHeld) it.release() }
         // bring the dashboard back before anything else, so it is normal again as soon as you are in the car
@@ -238,8 +227,6 @@ class PetService : Service() {
         }
         var failedOff = false
         if (stopAc) failedOff = !CarCommand.stopClimate(this).ok
-        if (cpdBefore == 1) CarCommand.setChildPresenceDetection(this, 1)     // put Child Presence Detection back
-        SealDrivePetWidget.redraw(this)
         if (warn) alert(reason, "The AC has been switched off" + (if (failedOff) " (could not confirm - check the car)" else "") +
             ". Your pet is no longer being cooled - go back to the car.")
         else if (failedOff) alert("Pet mode off - AC may still be running", "Could not confirm the AC switched off.")

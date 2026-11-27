@@ -112,9 +112,25 @@ class MainActivity : Activity() {
             }
             setOnClickListener { startActivity(Intent(this@MainActivity, StatsActivity::class.java)) }
         }
+        val controlsBtn = ImageButton(this).apply {
+            setImageResource(R.drawable.ic_pet)
+            contentDescription = "Controls: pet mode and holiday mode"
+            setPadding(dp(8), dp(8), dp(8), dp(8))
+            background = GradientDrawable().apply {
+                shape = GradientDrawable.OVAL
+                setColor(0xCC12263D.toInt())
+                setStroke(dp(1), 0x6622405E)
+            }
+            setOnClickListener { startActivity(Intent(this@MainActivity, ControlsActivity::class.java)) }
+        }
         setContentView(FrameLayout(this).apply {
             filterTouchesWhenObscured = true          // ignore taps while another app draws over this one (tapjacking)
             addView(web, FrameLayout.LayoutParams(-1, -1))
+            addView(controlsBtn, FrameLayout.LayoutParams(dp(42), dp(42)).apply {
+                gravity = Gravity.TOP or Gravity.END
+                topMargin = dp(58)
+                marginEnd = dp(8)
+            })
             addView(statsBtn, FrameLayout.LayoutParams(dp(42), dp(42)).apply {
                 gravity = Gravity.TOP or Gravity.END
                 topMargin = dp(8)
@@ -336,8 +352,6 @@ class MainActivity : Activity() {
                     failCount = 0
                     web.loadUrl(saved)
                     if (SealDriveWidget.hasMainWidgets(this)) thread { SealDriveWidget.refreshNow(this) }
-                    SealDrivePetWidget.redraw(this)
-                    SealDriveHolidayWidget.redraw(this)
                 }
             }
         if (url != null) d.setNegativeButton("Cancel", null)

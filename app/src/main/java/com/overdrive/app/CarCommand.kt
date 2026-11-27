@@ -54,10 +54,6 @@ object CarCommand {
         }
     }
 
-    /** Sets Child Presence Detection: value 1 = on, 2 = off (Overdrive's own values). */
-    fun setChildPresenceDetection(ctx: Context, value: Int): Outcome =
-        post(ctx, "/api/vehicle/setting", JSONObject().put("target", "childPresenceDetection").put("value", value))
-
     /** Turns the climate ON at [tempC] for [minutes] (Overdrive allows 10, 15, 20, 25 or 30). */
     fun startClimate(ctx: Context, tempC: Double, minutes: Int): Outcome {
         val r = post(ctx, "/api/vehicle/climate",

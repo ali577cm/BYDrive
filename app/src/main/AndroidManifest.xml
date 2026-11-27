@@ -33,6 +33,10 @@
                 android:resource="@xml/shortcuts" />
         </activity>
         <activity
+            android:name=".ControlsActivity"
+            android:exported="false"
+            android:theme="@style/Theme.App" />
+        <activity
             android:name=".StatsActivity"
             android:exported="false"
             android:theme="@style/Theme.App" />
@@ -75,28 +79,6 @@
             <meta-data
                 android:name="android.appwidget.provider"
                 android:resource="@xml/sealdrive_widget_small_info" />
-        </receiver>
-        <receiver
-            android:name=".SealDrivePetWidget"
-            android:label="BYDrive pet mode"
-            android:exported="false">
-            <intent-filter>
-                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
-            </intent-filter>
-            <meta-data
-                android:name="android.appwidget.provider"
-                android:resource="@xml/sealdrive_pet_info" />
-        </receiver>
-        <receiver
-            android:name=".SealDriveHolidayWidget"
-            android:label="BYDrive holiday"
-            android:exported="false">
-            <intent-filter>
-                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
-            </intent-filter>
-            <meta-data
-                android:name="android.appwidget.provider"
-                android:resource="@xml/sealdrive_holiday_info" />
         </receiver>
     </application>
 </manifest>
